@@ -1,0 +1,52 @@
+SHELL=/bin/bash
+
+TARGET      =android
+ANDROID_ROOT= "/home/sandy.luo/android/rootfs2"
+PRODUCT     = "b01ref"
+
+ifeq ($(VERBOSE),1)
+	DUMP=2>/dev/stderr
+else
+	DUMP=2>/dev/null
+endif
+
+
+#############################################################################
+## targets
+
+LIB_FOLDERS = \
+	platform/linux \
+	mllite/mpl/$(TARGET) \
+	mldmp/mpl/$(TARGET)
+
+INSTALL_DIR = $(CURDIR)/../mlsdk-rel/
+
+####################################################################################################
+## macros
+
+define echo_in_colors
+	echo -ne "\e[1;34m"$(1)"\e[0m"
+endef 
+
+define maker_libs
+	$(call echo_in_colors, "\n<making '$(1)' in folder 'platform/linux'>\n"); \
+	make ANDROID_ROOT=$(ANDROID_ROOT) PRODUCT=$(PRODUCT) -C platform/linux -f Makefile_platform_so $@ $(DUMP)
+
+	$(call echo_in_colors, "\n<making '$(1)' in folder 'mllite/mpl/$(TARGET)'>\n"); \
+	make ANDROID_ROOT=$(ANDROID_ROOT) PRODUCT=$(PRODUCT) -C mllite/mpl/$(TARGET) -f static-mlmath_so.mk $@ $(DUMP)
+
+endef
+
+#############################################################################
+## rules
+
+.PHONY : all $(LIB_FOLDERS) $(APP_FOLDERS) clean cleanall install
+
+all : 
+	@$(call maker_libs,$@)
+
+clean : 
+	@$(call maker_libs,$@)
+
+cleanall : 
+	@$(call maker_libs,$@)
