@@ -1,0 +1,9 @@
+1,in path: hardware/amlogic/mpu3050/invensense/hardware/mlsdk $
+  run: make cleanall
+  then run :make -f Makefile_so
+  then copy libmlplatform.so to hardware\amlogic\sensors\mpu3050\invensense\hardware
+  then copy mpu3050/invensense/hardware/mlsdk/platform/linux/libmlplatform.so  to hardware\amlogic\sensors\mpu3050\invensense\hardware
+  then copy hardware/mlsdk/mllite/mpl/android/libmllite.so to hardware\amlogic\sensors\mpu3050\invensense\hardware
+  then in path:hardware\amlogic\sensors\mpu3050\invensense\hardware $
+  run mm
+  
