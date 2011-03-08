@@ -1,9 +1,10 @@
 SHELL=/bin/bash
 
 TARGET      =android
-ANDROID_ROOT= "/home/sandy.luo/android/rootfs2"
-PRODUCT     = "b01ref"
-
+#ANDROID_ROOT= "/home/sandy.luo/android/rootfs"
+#PRODUCT     = "b01ref"
+ANDROID_ROOT= $(ANDROID_BUILD_TOP)
+PRODUCT     = $(TARGET_PRODUCT)
 ifeq ($(VERBOSE),1)
 	DUMP=2>/dev/stderr
 else
