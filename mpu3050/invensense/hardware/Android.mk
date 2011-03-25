@@ -65,7 +65,11 @@ LOCAL_MODULE_TAGS := eng user debug
 LOCAL_CFLAGS += -g
 LOCAL_CPPFLAGS += -g
 LOCAL_LDFLAGS += -g
+ifeq ($(BOARD_USES_LIGHT_SENSOR),true)
+LOCAL_SRC_FILES :=sensors2.cpp Impld.cpp
+else
 LOCAL_SRC_FILES :=sensors.cpp Impld.cpp
+endif
 LOCAL_SHARED_LIBRARIES := liblog libcutils libutils libbinder
 LOCAL_PRELINK_MODULE := false
 include $(BUILD_SHARED_LIBRARY)
