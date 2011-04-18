@@ -348,8 +348,8 @@ int open_mpld_socket()
 
     if (connect(fd, (const struct sockaddr*) &sockAddr, sockLen) < 0) {
         LOGE("HAL: mpld connect: connect() faild");
-        close(fd);
-        return -1;
+        //close(fd);
+        //return -1;
     }
 
     read(fd, &token, sizeof(token));
