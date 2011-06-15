@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include "mltypes.h"
+
 uint32_t ml_checksum(unsigned char *str, int len);
 
 #ifdef __cplusplus

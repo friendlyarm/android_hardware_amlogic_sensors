@@ -5,7 +5,7 @@
  */
 /******************************************************************************
  *
- * $Id: ml.c 4253 2010-12-08 18:00:39Z prao $
+ * $Id: ml.c 5159 2011-04-07 02:30:26Z mcaramello $
  *
  *****************************************************************************/
 
@@ -47,7 +47,7 @@
 #include "mlcontrol.h"
 #include "mldl_cfg.h"
 #include "mpu.h"
-
+#include "accel.h"
 #include "mlos.h"
 #include "mlsl.h"
 #include "mlos.h"
@@ -96,35 +96,34 @@ tMLXCallbackInterrupt mlxCallbackInterrupt;
 /* -  Functions. - */
 /* --------------- */
 
-tMLError FreescaleSensorFusion16bit(const signed char *mtx);
-tMLError FreescaleSensorFusion8bit(const signed char *mtx);
+tMLError FreescaleSensorFusion16bit( unsigned short orient );
+tMLError FreescaleSensorFusion8bit( unsigned short orient );
+unsigned short MLOrientationMatrixToScalar( const signed char *mtx );
 
 /**
  *  @brief  Open the serial connection with the device. 
  *          This is the entry point of the MPL and must be 
  *          called prior to any other function call.
  *          
- *  @param  portNum     number of the COM port the device is connected to.
+ *  @param  port     port the device is connected to.
  *  @return ML_SUCCESS or error code.
  */
-tMLError MLSerialOpen(char const * port)
+tMLError MLSerialOpen(char const *port)
 {
     INVENSENSE_FUNC_START;
     tMLError result;
+
+    if (MLGetState() >= ML_STATE_SERIAL_OPENED)
+        return ML_SUCCESS;
 
     result = MLStateTransition(ML_STATE_SERIAL_OPENED);
     ERROR_CHECK(result);
 
     result = MLSLSerialOpen(port, &g_mlsl_handle);
-    if (ML_SUCCESS == result){
-        result = MLDLOpen(g_mlsl_handle);
-        if (ML_SUCCESS != result){
-            (void)MLSLSerialClose(g_mlsl_handle);
-        }
-    }
     if (ML_SUCCESS != result) {
         (void)MLStateTransition(ML_STATE_SERIAL_CLOSED);
     }
+
     return result;
 }
 
@@ -141,10 +140,9 @@ tMLError MLSerialClose(void)
     INVENSENSE_FUNC_START;
     tMLError result = ML_SUCCESS;
 
-    result = MLDLClose();
-    if (ML_SUCCESS != result) {
-        MPL_LOGE("MLDLClose error in %s: %d\n", __func__, result);
-    }
+    if (MLGetState() == ML_STATE_SERIAL_CLOSED)
+        return ML_SUCCESS;
+
     result = MLStateTransition(ML_STATE_SERIAL_CLOSED);
     if (ML_SUCCESS != result) {
         MPL_LOGE("State Transition Failure in %s: %d\n", __func__, result);
@@ -213,10 +211,10 @@ tMLError MLApplyCalibration(void)
     }
 
     RANGE_FIXEDPOINT_TO_FLOAT(mldl_cfg->accel->range, accelScale);
-    mlxData.mlAccelSens = (long)(accelScale/2*65536L);
+    mlxData.mlAccelSens = (long)(accelScale / 2 * 65536L);
 
     RANGE_FIXEDPOINT_TO_FLOAT(mldl_cfg->compass->range, magScale);
-    mlxData.mlMagSens = (long)(magScale*32768);
+    mlxData.mlMagSens = (long)(magScale * 32768);
 
     if(MLGetState()==ML_STATE_DMP_OPENED) {
 
@@ -241,7 +239,6 @@ tMLError MLApplyCalibration(void)
     return ML_SUCCESS;
 }
 
-
 /**
  *  @brief  Setup the DMP to handle the accelerometer endianess.
  *  @return ML_SUCCESS if successful, a non-zero error code otherwise.
@@ -249,7 +246,6 @@ tMLError MLApplyCalibration(void)
 tMLError MLApplyAccelEndian(void)
 {
     INVENSENSE_FUNC_START;
-    tMLError result = ML_SUCCESS;
     unsigned char regs[4] = {0};
     struct mldl_cfg * mldl_cfg = MLDLGetCfg();
     int endian = mldl_cfg->accel->endian;
@@ -259,21 +255,7 @@ tMLError MLApplyAccelEndian(void)
     }
     switch (endian){
     case EXT_SLAVE_FS8_BIG_ENDIAN:
-        result = FreescaleSensorFusion8bit(mldl_cfg->pdata->accel.orientation);
-        ERROR_CHECK(result);
-        regs[0] = 0;
-        regs[1] = 64;
-        regs[2] = 0;
-        regs[3] = 0;
-        break;
     case EXT_SLAVE_FS16_BIG_ENDIAN:
-        result = FreescaleSensorFusion16bit(mldl_cfg->pdata->accel.orientation);
-        ERROR_CHECK(result);
-        regs[0] = 0;
-        regs[1] = 64;
-        regs[2] = 0;
-        regs[3] = 0;
-        break;
     case EXT_SLAVE_LITTLE_ENDIAN:
         regs[0] = 0;
         regs[1] = 64;
@@ -291,8 +273,6 @@ tMLError MLApplyAccelEndian(void)
     return MLDLSetMemoryMPU(KEY_D_1_236, 4, regs);
 }
 
-
-
 /**
  * @internal
  * @brief   Initialize MLX data.  This should be called to setup the mlx
@@ -303,13 +283,17 @@ void MLXInit(void)
     INVENSENSE_FUNC_START;
 
     // Set all values to zero by default
-    memset( &mlxData,     0, sizeof(tMLXData) );
-    memset( &mlxCallbackInterrupt, 0, sizeof(tMLXCallbackInterrupt) );
+    memset(&mlxData, 0, sizeof(tMLXData));
+    memset(&mlxCallbackInterrupt, 0, sizeof(tMLXCallbackInterrupt));
 
     // Now set all the non-zero values
     mlxData.mlEngineMask = ML_BASIC;             // mlEngineMask
 
-    mlxData.mlMagCorrection[0] = 1073741824L;                
+    mlxData.mlMagCorrection[0] = 1073741824L;
+    mlxData.mlMagCorrectionRelative[0] = 1073741824L;
+    mlxData.mlMagDisturbCorrection[0] = 1073741824L;
+    mlxData.mlMagCorrectionOffset[0] = 1073741824L;
+    mlxData.mlRelativeQuat[0] = 1073741824L;
 
     //Not used with the ST accelerometer
     mlxData.mlNoMotionThreshold = 20;            // noMotionThreshold
@@ -360,6 +344,11 @@ void MLXInit(void)
     mlxData.mlMagBiasP[0] = P_INIT;
     mlxData.mlMagBiasP[4] = P_INIT;
     mlxData.mlMagBiasP[8] = P_INIT;
+
+    mlxData.mlGyroBiasErr = 1310720;
+
+    mlxData.accelLPFgain = 1073744L;
+    mlxData.mlNoMotionAccelThreshold = 7000000L;
 }
 
 /**
@@ -414,7 +403,7 @@ tMLError MLDisableMotionDetect(void)
  * @param func Function to be called when a DMP interrupt occurs.
  * @return ML_SUCCESS or non-zero error code.
  */
-tMLError RegisterProcessDmpInterrupt( tMlxdataFunction func )
+tMLError RegisterProcessDmpInterrupt(tMlxdataFunction func)
 {
     INVENSENSE_FUNC_START;
     // Make sure we have not filled up our number of allowable callbacks
@@ -439,7 +428,7 @@ tMLError RegisterProcessDmpInterrupt( tMlxdataFunction func )
  * @brief This unregisters a function to be called for each DMP interrupt.
  * @return ML_SUCCESS or non-zero error code.
  */
-tMLError UnRegisterProcessDmpInterrupt( tMlxdataFunction func )
+tMLError UnRegisterProcessDmpInterrupt(tMlxdataFunction func)
 {
     INVENSENSE_FUNC_START;
     int kk,jj;
@@ -475,14 +464,22 @@ void RunProcessDmpInterruptFuncs(void)
 /** @internal
 * Resets the Motion/No Motion state which should be called at startup and resume.
 */
-tMLError MLResetMotion()
+tMLError MLResetMotion(void)
 {
     unsigned char regs[8];
     tMLError result;
 
     mlxData.mlMotionState = ML_MOTION;
     mlxData.mlFlags[ML_MOTION_STATE_CHANGE] = ML_MOTION;
-
+    mlxData.mlNoMotionAccelTime = MLOSGetTickCount();
+#ifndef M_HW
+    regs[0] = DINAD8 + 2;
+    regs[1] = DINA0C;
+    regs[2] = DINAD8 + 1;
+    result = MLDLSetMemoryMPU(KEY_CFG_18, 3, regs);
+    ERROR_CHECK(result);
+#else
+#endif
     regs[0] = (unsigned char)((mlxData.mlMotionDuration>>8) & 0xff);
     regs[1] = (unsigned char)( mlxData.mlMotionDuration     & 0xff);
     result = MLDLSetMemoryMPU( KEY_D_1_106, 2, regs);
@@ -500,20 +497,86 @@ tMLError MLResetMotion()
  *          This function can be called periodically to check for the 
  *          'no motion' state and update the internal motion status and bias 
  *          calculations.
+ * @param newData Set to non-zero if there is new data available.
  */
-tMLError MLPollMotionStatus(void)
+tMLError MLPollMotionStatus(int newData)
 {
     INVENSENSE_FUNC_START;
     unsigned char regs[3] = {0};
     unsigned short motionFlag = 0;
-    static long repeatBiasUpdateTime = 0;
+    long accel[3], temp;
+    long long accelMag;
+    unsigned long currentTime;
     tMLError result;
+    int kk;
 
-    if (MLGetGyroPresent()==0) {
+    // Return if we don't have motion detection turned on
+    if ( (mlxData.mlEngineMask & ML_MOTION_DETECT) == 0) {
         return ML_SUCCESS;
     }
 
-    if (mlxData.mlEngineMask & ML_MOTION_DETECT) {
+    currentTime = MLOSGetTickCount();
+
+    // We always run the accel low pass filter at the highest sample rate possible
+    if (AccelGetPresent() && newData) {
+        long gain;
+        unsigned long timeChange;
+        long rate;
+
+        result = FIFOGetAccel(accel);
+        if ( result != ML_ERROR_FEATURE_NOT_ENABLED ) {
+            ERROR_CHECK(result);
+            rate = MLGetFIFORate()*5+5;
+            if ( rate > 200 )
+                rate = 200;
+
+            gain = mlxData.accelLPFgain * rate;
+            timeChange = MLGetFIFORate();
+
+            accelMag  = 0;
+            for (kk=0; kk<ACCEL_NUM_AXES; ++kk) {
+                mlxData.accelLPF[kk]  = q30_mult(((1L<<30) - gain), mlxData.accelLPF[kk]);
+                mlxData.accelLPF[kk] += q30_mult(gain, accel[kk]);
+                temp = accel[0] - mlxData.accelLPF[0];
+                accelMag += (long long)temp*temp;
+            }
+
+            if (accelMag > mlxData.mlNoMotionAccelThreshold) {
+                mlxData.mlNoMotionAccelTime = currentTime;
+
+                // Check for change of state
+                if (!MLGetGyroPresent() && mlxData.mlMotionState==ML_NO_MOTION) {
+                    mlxData.mlMotionState = ML_MOTION;
+                    mlxData.mlFlags[ML_MOTION_STATE_CHANGE] = ML_MOTION;
+                    if (mlParams.motionCallback) {
+                        mlParams.motionCallback(ML_MOTION);
+                    }
+                }
+            } else if ( (currentTime - mlxData.mlNoMotionAccelTime) > 5*mlxData.mlMotionDuration ) {
+                // We have no motion according to accel
+                // Check fsor change of state
+                if (!MLGetGyroPresent() && mlxData.mlMotionState==ML_MOTION) {
+                    mlxData.mlMotionState = ML_NO_MOTION;
+                    mlxData.mlFlags[ML_MOTION_STATE_CHANGE] = ML_NO_MOTION;
+                    if (mlParams.motionCallback) {
+                        mlParams.motionCallback(ML_NO_MOTION);
+                    }
+                }
+            }
+        }
+    }
+
+    // If it is not time to poll for a no motion event, return
+    if ( ((mlxData.mlInterruptSources & ML_INT_MOTION) == 0) &&
+        ((currentTime -  mlxData.polltimeNoMotion) <= 1000) )
+        return ML_SUCCESS;
+
+    mlxData.polltimeNoMotion = currentTime;
+
+#ifndef M_HW
+    if (MLGetGyroPresent()) {
+        static long repeatBiasUpdateTime = 0;
+        
         result = MLDLGetMemoryMPU(KEY_D_1_98, 2, regs);
         ERROR_CHECK(result);
 
@@ -538,7 +601,7 @@ tMLError MLPollMotionStatus(void)
 
                 //Trigger no motion callback
                 mlxData.mlMotionState = ML_NO_MOTION;
-                mlxData.mlGotNoMotionBias = 1;
+                mlxData.mlGotNoMotionBias = TRUE;
                 mlxData.mlFlags[ML_MOTION_STATE_CHANGE] = ML_NO_MOTION;
                 if (mlParams.motionCallback) {
                     mlParams.motionCallback(ML_NO_MOTION);
@@ -573,7 +636,39 @@ tMLError MLPollMotionStatus(void)
             }
         }            
     }
+#else /* #ifdef M_HW */
+    if (MLGetGyroPresent()) {
+        result = MLDLGetMemoryMPU(KEY_D_1_98, 2, regs);
+        ERROR_CHECK(result);
 
+        motionFlag = (unsigned short)regs[0]*256 + (unsigned short)regs[1];
+
+        _mlDebug(MPL_LOGV("motionFlag from RAM : 0x%04X\n", motionFlag);)
+        if (motionFlag > 0 ) {
+            // We are in a no motion state
+            if (mlxData.mlMotionState==ML_MOTION) {
+
+                //Trigger no motion callback
+                mlxData.mlMotionState = ML_NO_MOTION;
+                mlxData.mlGotNoMotionBias = 1;
+                mlxData.mlFlags[ML_MOTION_STATE_CHANGE] = ML_NO_MOTION;
+                if (mlParams.motionCallback) {
+                    mlParams.motionCallback(ML_NO_MOTION);
+                }
+            }
+        } else {
+            // We are in a motion state
+            if (mlxData.mlMotionState==ML_NO_MOTION) {
+                //Trigger no motion callback
+                mlxData.mlMotionState = ML_MOTION;
+                mlxData.mlFlags[ML_MOTION_STATE_CHANGE] = ML_MOTION;
+                if (mlParams.motionCallback) {
+                    mlParams.motionCallback(ML_MOTION);
+                }
+            }
+        }           
+    }
+#endif // M_HW
     return ML_SUCCESS;
 }
 
@@ -585,26 +680,32 @@ tMLError MLUpdateBias(void)
     unsigned char regs[12];
     long biasTmp[3],biasTmp2[3];
     long biasPrev[3] = {0};
+    short bias[MPU_NUM_AXES];
     struct mldl_cfg * mldl_cfg = MLDLGetCfg();
 
 
-    if ((mlParams.biasUpdateFunc & ML_BIAS_FROM_NO_MOTION) && (MLGetGyroPresent()==1)) {
+    if ((mlParams.biasUpdateFunc & ML_BIAS_FROM_NO_MOTION) 
+            && MLGetGyroPresent()) {
         int sf;
-        if (mldl_cfg->trim!=0) {
-            sf = 2000*131/mldl_cfg->trim;
+        if (mldl_cfg->trim != 0) {
+            sf = 2000 * 131 / mldl_cfg->trim;
         } else {
             sf = 2000;
         }
         //Reset bias
         regs[0] = DINAA0 + 3;
-        result = MLDLSetMemoryMPU( KEY_FCFG_6, 1, regs);
+        result = MLDLSetMemoryMPU(KEY_FCFG_6, 1, regs);
         ERROR_CHECK(result);
 
         result = MLDLGetMemoryMPU(KEY_D_1_244, 12, regs);
         ERROR_CHECK(result);
 
         for ( i=0; i<3; i++ ) {
-            biasTmp2[i] = (((long)regs[i*4]<<24)+((long)regs[i*4+1]<<16) + ((long)regs[i*4+2]<<8)+ ((long)regs[i*4+3]));
+            biasTmp2[i] = 
+                ((long)regs[i*4]   << 24) + 
+                ((long)regs[i*4+1] << 16) + 
+                ((long)regs[i*4+2] << 8 ) + 
+                ((long)regs[i*4+3]);
         }
         // Rotate bias vector by the transpose of the orientation matrix
         for ( i=0; i<3; ++i ) {
@@ -616,32 +717,29 @@ tMLError MLUpdateBias(void)
         result = MLDLSetMemoryMPU( KEY_FCFG_6, 1, regs);
         ERROR_CHECK(result);
 
-        result = MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
-                                MPUREG_X_OFFS_USRH, 6, regs);
-        ERROR_CHECK(result);
-
         for( i=0 ; i<3 ; i++ ) {
             biasTmp[i]/=1430;
-            biasPrev[i] = (long)regs[2*i]*256+(int)regs[2*i+1];
+            biasPrev[i] = (long)mldl_cfg->offset[i];
             if (biasPrev[i]>32767) biasPrev[i]-=65536L;
         }
         for (i=0; i<3; i++) {
             biasTmp[i]=biasPrev[i]-biasTmp[i];
             mlxData.mlBias[i] = -biasTmp[i]*sf;
+            mlxData.mlNoMotionBias[i] = mlxData.mlBias[i];
             if (biasTmp[i]<0) biasTmp[i]+=65536L;
-            regs[1+2*i] = (unsigned char)((biasTmp[i]>>8) & 0xff);
-            regs[1+2*i+1] = (unsigned char)(biasTmp[i] & 0xff);
+            bias[i] = (short)biasTmp[i];
         }
-        regs[0] = MPUREG_X_OFFS_USRH;
-        result = MLSLSerialWrite(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(), 
-                                 7, regs);
+
+        result = MLDLSetOffset((unsigned short*)bias);
         ERROR_CHECK(result);
+
         result = MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(), 
                                 MPUREG_TEMP_OUT_H, 2, regs);
         ERROR_CHECK(result);
         result = MLDLSetMemoryMPU(KEY_DMP_PREVPTAT, 2, regs);
         ERROR_CHECK(result);
-        mlxData.mlGotNoMotionBias = 1;
+
+        mlxData.mlGotNoMotionBias = TRUE;
     }
     return ML_SUCCESS;
 }
@@ -685,23 +783,16 @@ void MLBiasStop(void)
 tMLError MLUpdateData(void)
 {
     INVENSENSE_FUNC_START;
-    static unsigned long polltimeNoMotion = 0;
     tMLError result=ML_SUCCESS;
     int_fast8_t got,ftry;
     uint_fast8_t mpu_interrupt;
+    struct mldl_cfg *mldl_cfg = MLDLGetCfg();
 
     if ( MLGetState() != ML_STATE_DMP_STARTED )
         return ML_ERROR_SM_IMPROPER_STATE;
     
-    //Process all interrupts
-    //Check if interrupt was from MPU
-    mpu_interrupt = MLDLGetIntTrigger(INTSRC_MPU);
-    if( mpu_interrupt) {
-        MLDLClearIntTrigger(INTSRC_MPU);
-    }
-    
     // Set the maximum number of FIFO packets we want to process
-    if (mlxData.mlDataMode & ML_DATA_FIFO) {
+    if (mldl_cfg->requested_sensors & ML_DMP_PROCESSOR) {
         ftry = 100; // Large enough to process all packets
     } else {
         ftry = 1;
@@ -711,16 +802,23 @@ tMLError MLUpdateData(void)
     result = readAndProcessFIFO( ftry, &got );
     ERROR_CHECK(result);
 
-    //Check if interrupt was from motion/no motion
-    if ( (mlxData.mlInterruptSources & ML_INT_MOTION) ||
-         ( ((mlxData.mlInterruptSources & ML_INT_MOTION) == 0) &&
-           (MLOSGetTickCount() -  polltimeNoMotion) > 1000)) { 
-        polltimeNoMotion = MLOSGetTickCount();
-        result = MLPollMotionStatus();
+    // Process all interrupts
+    mpu_interrupt = MLDLGetIntTrigger(INTSRC_AUX1);
+    if(mpu_interrupt) {
+        MLDLClearIntTrigger(INTSRC_AUX1);
     }
+    // Check if interrupt was from MPU
+    mpu_interrupt = MLDLGetIntTrigger(INTSRC_MPU);
+    if(mpu_interrupt) {
+        MLDLClearIntTrigger(INTSRC_MPU);
+    }
+
+    // Check if interrupt was from motion/no motion
+    result = MLPollMotionStatus(got);
+    ERROR_CHECK(result);
     
     // Take care of the callbacks that want to be notified when there was an MPU interrupt
-    if( mpu_interrupt ) {
+    if(mpu_interrupt) {
         RunProcessDmpInterruptFuncs();
     }
 
@@ -777,7 +875,7 @@ int MLCheckFlag(int flag)
  *          MLDmpPedometerStandAloneOpen()
  *          must have been called.
  *
- *  @return     a bit mask of the engines currently enabled.
+ *  @return a bit mask of the engines currently enabled.
  */
 int MLGetEngines(void)
 {
@@ -786,105 +884,13 @@ int MLGetEngines(void)
     return mlxData.mlEngineMask;
 }
 
-/**
- * @brief   Set the data source for the ML.
- *          Used to switch between FIFO data and data retrieved
- *          from the MPU ram.
- *
- *  @pre    MLDmpOpen() or 
- *          MLDmpPedometerStandAloneOpen() and MLDmpStart() 
- *          must <b>NOT</b> have been called.
- *
- * @param   dataMode The data mode can be one of
- *                   - ML_DATA_FIFO
- *                   - ML_DATA_POLL
- *                   - ML_DATA_GESTURE_INT
- *                   - 0 for none.
- *
- * @return  ML_SUCCESS if successful, error code on any error.
- */
-tMLError MLSetDataMode(unsigned short dataMode)
-{
-    INVENSENSE_FUNC_START;
-    unsigned char regs[1] = {163};
-
-    if ( MLGetState() < ML_STATE_DMP_OPENED )
-        return ML_ERROR_SM_IMPROPER_STATE;
-
-    /* check mutual exclusivity of data modes */
-    if ( (dataMode & ML_DATA_FIFO) && (dataMode & ML_DATA_POLL) ) {
-        return ML_ERROR_INVALID_PARAMETER;
-    }
-    /* check if dataMode contains other spurious bits other than 
-     * ML_DATA_FIFO and ML_DATA_POLL */
-    if ( (dataMode & (~(ML_DATA_GESTURE_INT|
-                        ML_DATA_FIFO|
-                        ML_DATA_POLL))) != 0 ) {
-        return ML_ERROR_INVALID_PARAMETER;
-    }
-
-    mlxData.mlDataMode = dataMode;
-
-#ifdef M_HW
-    if (mlxData.mlDataMode & ML_DATA_FIFO) {
-        regs[0] = DINBF8;
-    } else {
-        regs[0] = DINAA0 + (19 & 0xf);
-    }
-#else
-    if (mlxData.mlDataMode & ML_DATA_FIFO) {
-        regs[0] = DINA18;
-    } else {
-        regs[0] = DINA08;
-    }
-#endif
-    if ( MLDLSetMemoryMPU(KEY_CFG_19, 1, regs) != ML_SUCCESS )
-        return ML_ERROR_MEMORY_SET;
-
-    if (mlxData.mlDataMode & ML_DATA_POLL) {
-        regs[0] = 1;
-        if ( MLDLSetMemoryMPU(KEY_D_1_179, 1, regs) != ML_SUCCESS )
-            return ML_ERROR_MEMORY_SET;
-    }
-
-    if ((mlxData.mlDataMode & ML_DATA_FIFO) || 
-        (mlxData.mlDataMode & ML_DATA_POLL)) {
-        regs[0] = DINADD;
-        if ( MLDLSetMemoryMPU(KEY_CFG_17, 1, regs) != ML_SUCCESS )
-            return ML_ERROR_MEMORY_SET;
-    } else {
-        regs[0] = DINAA0+3;
-        if ( MLDLSetMemoryMPU(KEY_CFG_17, 1, regs) != ML_SUCCESS )
-            return ML_ERROR_MEMORY_SET;
-    }
-
-    return ML_SUCCESS;
-}
-
-/**
- * @brief   Get the current data source used by the ML.
- *
- *
- *  @pre    MLDmpOpen() or 
- *          MLDmpPedometerStandAloneOpen()
- *          must have been called.
- *
- * @return  The data mode, one of ML_DATA_FIFO, ML_DATA_POLL, 
- *          or ML_DATA_GESTURE_INT.
- */
-int MLGetDataMode(void)
-{
-    INVENSENSE_FUNC_START;
-
-    return mlxData.mlDataMode;
-}
 
 /** 
- * Enable generation of the DMP interrupt when Motion or no-motion is detected
- * 
- * @param on Boolean to turn the interrupt on or off
- * 
- * @return ML_SUCCESS or non-zero error code
+ *  @brief  Enable generation of the DMP interrupt when Motion or no-motion 
+ *          is detected
+ *  @param on 
+ *          Boolean to turn the interrupt on or off.
+ *  @return ML_SUCCESS or non-zero error code.
  */
 tMLError MLSetMotionInterrupt(unsigned char on)
 {
@@ -968,7 +974,6 @@ tMLError MLSetFifoInterrupt(unsigned char on)
  * @return  Currently enabled interrupt sources.  The possible interrupts are:
  *          - ML_INT_FIFO,
  *          - ML_INT_MOTION, 
- *          - ML_INT_GESTURE, and
  *          - ML_INT_TAP
  */
 int MLGetInterrupts(void)
@@ -1008,6 +1013,7 @@ int MLGetInterrupts(void)
  *          - ML_MAG_BIAS 
  *          - ML_HEADING
  *          - ML_MAG_BIAS_ERROR
+ *          - ML_PRESSURE
  *
  *          Please refer to the documentation of MLGetFloatArray() for a 
  *          description of these data sets.
@@ -1054,9 +1060,6 @@ tMLError MLGetArray(int dataSet, long* data)
             break;
         case ML_TEMPERATURE:
             result = FIFOGetTemperature( data );
-            break;
-        case ML_BIAS_UNCERTAINTY:   
-            data[0] = FIFOGetBiasUncertainty();
             break;
         case ML_ROTATION_MATRIX:
             {
@@ -1135,9 +1138,15 @@ tMLError MLGetArray(int dataSet, long* data)
             data[2] = (long)((float)((double)atan2(rotMatrix[5], rotMatrix[2])*57.29577951308)*65536L);
             break;
         case ML_GYRO_TEMP_SLOPE:
-            data[0] = mlxData.mlTempSlope[0];
-            data[1] = mlxData.mlTempSlope[1];
-            data[2] = mlxData.mlTempSlope[2];
+            if (mlParams.biasUpdateFunc & ML_LEARN_BIAS_FROM_TEMPERATURE) {
+                data[0] = (long)(mlxData.mlXGyroCoeff[1]*65536.0f);
+                data[1] = (long)(mlxData.mlYGyroCoeff[1]*65536.0f);
+                data[2] = (long)(mlxData.mlZGyroCoeff[1]*65536.0f);
+            } else {
+                data[0] = mlxData.mlTempSlope[0];
+                data[1] = mlxData.mlTempSlope[1];
+                data[2] = mlxData.mlTempSlope[2];
+            }
             break;
         case ML_GYRO_BIAS:
             data[0] = mlxData.mlBias[0];
@@ -1150,12 +1159,12 @@ tMLError MLGetArray(int dataSet, long* data)
             data[2] = mlxData.mlBias[5];
             break;
         case ML_MAG_BIAS:                        
-            data[0] = mlxData.mlMagBias[0] + (long)((long long)mlxData.mlInitMagBias[0]* mlxData.mlMagSens / 16834);                     
-            data[1] = mlxData.mlMagBias[1] + (long)((long long)mlxData.mlInitMagBias[1]* mlxData.mlMagSens / 16834);                     
-            data[2] = mlxData.mlMagBias[2] + (long)((long long)mlxData.mlInitMagBias[2]* mlxData.mlMagSens / 16834);                     
+            data[0] = mlxData.mlMagBias[0] + (long)((long long)mlxData.mlInitMagBias[0]* mlxData.mlMagSens / 16384);                     
+            data[1] = mlxData.mlMagBias[1] + (long)((long long)mlxData.mlInitMagBias[1]* mlxData.mlMagSens / 16384);                     
+            data[2] = mlxData.mlMagBias[2] + (long)((long long)mlxData.mlInitMagBias[2]* mlxData.mlMagSens / 16384);                     
             break; 
         case ML_RAW_DATA:
-            result = FIFOGetSensorData( data );
+            result = FIFOGetSensorData(data);
             break;
         case ML_MAG_RAW_DATA:
             data[0] = mlxData.mlMagSensorData[0];
@@ -1163,9 +1172,12 @@ tMLError MLGetArray(int dataSet, long* data)
             data[2] = mlxData.mlMagSensorData[2];
             break;      
         case ML_MAGNETOMETER:           
-            data[0] = mlxData.mlMagCalibratedData[0];           
-            data[1] = mlxData.mlMagCalibratedData[1];           
-            data[2] = mlxData.mlMagCalibratedData[2];                  
+            data[0] = mlxData.mlMagSensorData[0] + mlxData.mlInitMagBias[0];
+            data[1] = mlxData.mlMagSensorData[1] + mlxData.mlInitMagBias[1];
+            data[2] = mlxData.mlMagSensorData[2] + mlxData.mlInitMagBias[2];
+            break; 
+        case ML_PRESSURE:
+            data[0] = mlxData.mlPressure;
             break; 
         case ML_HEADING:
             MLGetFloatArray(ML_ROTATION_MATRIX, rotMatrix);
@@ -1213,9 +1225,31 @@ tMLError MLGetArray(int dataSet, long* data)
             data[8] = mlxData.mlMagCal[8];                                        
             break;    
         case ML_MAG_BIAS_ERROR:
-            data[0] = mlxData.mlMagBiasError[0]; 
-            data[1] = mlxData.mlMagBiasError[1];
-            data[2] = mlxData.mlMagBiasError[2];
+            if (mlxData.mlLargeField==0) {
+                data[0] = mlxData.mlMagBiasError[0];
+                data[1] = mlxData.mlMagBiasError[1];
+                data[2] = mlxData.mlMagBiasError[2];
+            } else {
+                data[0] = P_INIT;
+                data[1] = P_INIT;
+                data[2] = P_INIT;
+            }
+            break;
+        case ML_MAG_SCALE:
+            data[0] = mlxData.mlMagScale[0];
+            data[1] = mlxData.mlMagScale[1];
+            data[2] = mlxData.mlMagScale[2];
+            break;
+        case ML_LOCAL_FIELD:
+            data[0] = mlxData.mlLocalField[0];
+            data[1] = mlxData.mlLocalField[1];
+            data[2] = mlxData.mlLocalField[2];
+            break;
+        case ML_RELATIVE_QUATERNION:
+            data[0] = mlxData.mlRelativeQuat[0];
+            data[1] = mlxData.mlRelativeQuat[1];
+            data[2] = mlxData.mlRelativeQuat[2];
+            data[3] = mlxData.mlRelativeQuat[3];
             break;
         default:            
             return ML_ERROR_INVALID_PARAMETER;
@@ -1308,7 +1342,6 @@ tMLError MLGetArray(int dataSet, long* data)
  *          therefore the default convention for Euler angles.
  *          Please refer to the ML_EULER_ANGLES_X for a detailed description.
  *
- *
  *          - ML_LINEAR_ACCELERATION :
  *          Returns an array of three data points representing the linear 
  *          acceleration as derived from both gyroscopes and accelerometers. 
@@ -1328,25 +1361,44 @@ tMLError MLGetArray(int dataSet, long* data)
  *
  *          - ML_ANGULAR_VELOCITY :
  *          Returns an array of three data points representing the angular 
- *          velocity as derived from both gyroscopes and accelerometers. This 
- *          requires that ML_SENSOR_FUSION be enabled.
+ *          velocity as derived from <b>both</b> gyroscopes and accelerometers.
+ *          This requires that ML_SENSOR_FUSION be enabled, to fuse data from
+ *          the gyroscope and accelerometer device, appropriately scaled and 
+ *          oriented according to the respective mounting matrices.
  *
  *          - ML_RAW_DATA :
- *          Returns an array of nine data points representing raw sensor data of 
- *          the gyroscope X, Y, Z, accelerometer X, Y, Z, and compass X, Y, Z 
- *          values.
+ *          Returns an array of nine data points representing raw sensor data 
+ *          of the gyroscope X, Y, Z, accelerometer X, Y, Z, and 
+ *          compass X, Y, Z values.
+ *          These values are not scaled and come out directly from the devices'
+ *          sensor data output. In case of accelerometers with lower output 
+ *          resolution, e.g 8-bit, the sensor data is scaled up to match the 
+ *          2^14 = 1 gee typical representation for a +/- 2 gee full scale 
+ *          range.
  *
  *          - ML_GYROS :
  *          Returns an array of three data points representing the X gyroscope,
  *          Y gyroscope, and Z gyroscope values.
+ *          The values are not sensor fused with other sensor types data but
+ *          reflect the orientation from the mounting matrices in use.
+ *          The ML_GYROS values are scaled to ensure 1 dps corresponds to 2^16 
+ *          codes.
  *
  *          - ML_ACCELS :
  *          Returns an array of three data points representing the X 
  *          accelerometer, Y accelerometer, and Z accelerometer values.
+ *          The values are not sensor fused with other sensor types data but
+ *          reflect the orientation from the mounting matrices in use.
+ *          The ML_ACCELS values are scaled to ensure 1 gee corresponds to 2^16
+ *          codes.
  *
  *          - ML_MAGNETOMETER :
  *          Returns an array of three data points representing the compass
  *          X, Y, and Z values.
+ *          The values are not sensor fused with other sensor types data but
+ *          reflect the orientation from the mounting matrices in use.
+ *          The ML_MAGNETOMETER values are scaled to ensure 1 micro Tesla (uT) 
+ *          corresponds to 2^16 codes.
  *
  *          - ML_GYRO_BIAS :
  *          Returns an array of three data points representing the gyroscope 
@@ -1357,7 +1409,8 @@ tMLError MLGetArray(int dataSet, long* data)
  *          accelerometer biases.
  *
  *          - ML_MAG_BIAS :
- *          Returns an array of three data points representing the compass biases.
+ *          Returns an array of three data points representing the compass 
+ *          biases.
  *
  *          - ML_GYRO_CALIBRATION_MATRIX :
  *          Returns an array of nine data points representing the calibration 
@@ -1380,11 +1433,15 @@ tMLError MLGetArray(int dataSet, long* data)
  *          <center>C21 C22 C23</center>
  *          <center>C31 C32 C33</center>
  *
+ *          - ML_PRESSURE :
+ *          Returns a single value representing the pressure in Pascal
+ *
  *          - ML_HEADING : 
- *          Returns a single number representing the heading of the device relative to the
- *          Earth, in which 0 represents North, 90 degrees represents East, and so on. 
- *          The heading is defined as the direction of the +Y axis if the Y axis is horizontal,
- *          and otherwise the direction of the -Z axis.
+ *          Returns a single number representing the heading of the device 
+ *          relative to the Earth, in which 0 represents North, 90 degrees 
+ *          represents East, and so on. 
+ *          The heading is defined as the direction of the +Y axis if the Y 
+ *          axis is horizontal, and otherwise the direction of the -Z axis.
  *
  *          - ML_MAG_BIAS_ERROR :
  *          Returns an array of three numbers representing the current estimated
@@ -1437,11 +1494,8 @@ tMLError MLGetFloatArray(int dataSet, float *data)
             break;
         case ML_TEMPERATURE:
             result = FIFOGetTemperature( ldata );
-            data[0] = (float)ldata[0]/65536.0f;
-            break;
-        case ML_BIAS_UNCERTAINTY:
-            data[0] = (float)FIFOGetBiasUncertainty()/65536.0f;
-            break;
+            data[0] = (float)ldata[0] / 65536.0f;
+            break; 
         case ML_ROTATION_MATRIX:
             {
                 long qdata[4],rdata[9];
@@ -1484,15 +1538,15 @@ tMLError MLGetFloatArray(int dataSet, float *data)
             data[2] = (float)ldata[2]/65536.0f;
             break;
         case ML_GYRO_CALIBRATION_MATRIX:
-            data[0] = (float)mlxData.mlGyroOrient[0]/1073741824.0f;
-            data[1] = (float)mlxData.mlGyroOrient[1]/1073741824.0f;
-            data[2] = (float)mlxData.mlGyroOrient[2]/1073741824.0f;
-            data[3] = (float)mlxData.mlGyroOrient[3]/1073741824.0f;
-            data[4] = (float)mlxData.mlGyroOrient[4]/1073741824.0f;
-            data[5] = (float)mlxData.mlGyroOrient[5]/1073741824.0f;
-            data[6] = (float)mlxData.mlGyroOrient[6]/1073741824.0f;
-            data[7] = (float)mlxData.mlGyroOrient[7]/1073741824.0f;
-            data[8] = (float)mlxData.mlGyroOrient[8]/1073741824.0f;
+            data[0] = (float)mlxData.mlGyroCal[0]/1073741824.0f;
+            data[1] = (float)mlxData.mlGyroCal[1]/1073741824.0f;
+            data[2] = (float)mlxData.mlGyroCal[2]/1073741824.0f;
+            data[3] = (float)mlxData.mlGyroCal[3]/1073741824.0f;
+            data[4] = (float)mlxData.mlGyroCal[4]/1073741824.0f;
+            data[5] = (float)mlxData.mlGyroCal[5]/1073741824.0f;
+            data[6] = (float)mlxData.mlGyroCal[6]/1073741824.0f;
+            data[7] = (float)mlxData.mlGyroCal[7]/1073741824.0f;
+            data[8] = (float)mlxData.mlGyroCal[8]/1073741824.0f;
             break;
         case ML_ACCEL_CALIBRATION_MATRIX:
             data[0] = (float)mlxData.mlAccelCal[0]/1073741824.0f;
@@ -1517,9 +1571,15 @@ tMLError MLGetFloatArray(int dataSet, float *data)
             data[8] = (float)mlxData.mlMagCal[8]/1073741824.0f;                                       
             break;              
         case ML_GYRO_TEMP_SLOPE:            
-            data[0] = (float)mlxData.mlTempSlope[0]/65536.0f;
-            data[1] = (float)mlxData.mlTempSlope[1]/65536.0f;
-            data[2] = (float)mlxData.mlTempSlope[2]/65536.0f;
+            if (mlParams.biasUpdateFunc & ML_LEARN_BIAS_FROM_TEMPERATURE) {
+                data[0] = mlxData.mlXGyroCoeff[1];
+                data[1] = mlxData.mlYGyroCoeff[1];
+                data[2] = mlxData.mlZGyroCoeff[1];
+            } else {
+                data[0] = (float)mlxData.mlTempSlope[0]/65536.0f;
+                data[1] = (float)mlxData.mlTempSlope[1]/65536.0f;
+                data[2] = (float)mlxData.mlTempSlope[2]/65536.0f;
+            }
             break;
         case ML_GYRO_BIAS:
             data[0] = (float)mlxData.mlBias[0]/65536.0f;
@@ -1532,9 +1592,9 @@ tMLError MLGetFloatArray(int dataSet, float *data)
             data[2] = (float)mlxData.mlBias[5]/65536.0f;
             break;
         case ML_MAG_BIAS:              
-            data[0] = ((float)(mlxData.mlMagBias[0] + (long)((long long)mlxData.mlInitMagBias[0]* mlxData.mlMagSens / 16834)))/65536.0f;                     
-            data[1] = ((float)(mlxData.mlMagBias[1] + (long)((long long)mlxData.mlInitMagBias[1]* mlxData.mlMagSens / 16834)))/65536.0f;                     
-            data[2] = ((float)(mlxData.mlMagBias[2] + (long)((long long)mlxData.mlInitMagBias[2]* mlxData.mlMagSens / 16834)))/65536.0f;                      
+            data[0] = ((float)(mlxData.mlMagBias[0] + (long)((long long)mlxData.mlInitMagBias[0]* mlxData.mlMagSens / 16384)))/65536.0f;
+            data[1] = ((float)(mlxData.mlMagBias[1] + (long)((long long)mlxData.mlInitMagBias[1]* mlxData.mlMagSens / 16384)))/65536.0f;
+            data[2] = ((float)(mlxData.mlMagBias[2] + (long)((long long)mlxData.mlInitMagBias[2]* mlxData.mlMagSens / 16384)))/65536.0f;
             break;              
         case ML_RAW_DATA:
             result = FIFOGetSensorData( ldata );
@@ -1589,15 +1649,18 @@ tMLError MLGetFloatArray(int dataSet, float *data)
             data[2] = (float)((double)atan2(rotMatrix[5], rotMatrix[2])*57.29577951308);
             break;
         case ML_MAG_RAW_DATA:            
-            data[0] = (float)mlxData.mlMagSensorData[0];            
-            data[1] = (float)mlxData.mlMagSensorData[1];            
-            data[2] = (float)mlxData.mlMagSensorData[2];            
+            data[0] = (float)(mlxData.mlMagSensorData[0] + mlxData.mlInitMagBias[0]);
+            data[1] = (float)(mlxData.mlMagSensorData[1] + mlxData.mlInitMagBias[1]);
+            data[2] = (float)(mlxData.mlMagSensorData[2] + mlxData.mlInitMagBias[2]);
             break;      
         case ML_MAGNETOMETER:            
             data[0] = (float)mlxData.mlMagCalibratedData[0]/65536.0f;            
             data[1] = (float)mlxData.mlMagCalibratedData[1]/65536.0f;            
             data[2] = (float)mlxData.mlMagCalibratedData[2]/65536.0f;            
             break;      
+        case ML_PRESSURE:
+            data[0] = (float)mlxData.mlPressure;
+            break; 
         case ML_HEADING:         
             MLGetFloatArray(ML_ROTATION_MATRIX, rotMatrix);
             if ((rotMatrix[7]<0.707) && (rotMatrix[7]>-0.707)) {
@@ -1611,11 +1674,32 @@ tMLError MLGetFloatArray(int dataSet, float *data)
             data[0] = 360-tmp;
             break;
         case ML_MAG_BIAS_ERROR:
-            data[0] = (float)mlxData.mlMagBiasError[0]; 
-            data[1] = (float)mlxData.mlMagBiasError[1];
-            data[2] = (float)mlxData.mlMagBiasError[2];
+            if (mlxData.mlLargeField==0) {
+                data[0] = (float)mlxData.mlMagBiasError[0]; 
+                data[1] = (float)mlxData.mlMagBiasError[1];
+                data[2] = (float)mlxData.mlMagBiasError[2];
+            } else {
+                data[0] = (float)P_INIT;
+                data[1] = (float)P_INIT;
+                data[2] = (float)P_INIT;
+            }
             break;
-
+        case ML_MAG_SCALE:
+            data[0] = (float)mlxData.mlMagScale[0]/65536.0f;
+            data[1] = (float)mlxData.mlMagScale[1]/65536.0f;
+            data[2] = (float)mlxData.mlMagScale[2]/65536.0f;
+            break;
+        case ML_LOCAL_FIELD:
+            data[0] = (float)mlxData.mlLocalField[0]/65536.0f;
+            data[1] = (float)mlxData.mlLocalField[1]/65536.0f;
+            data[2] = (float)mlxData.mlLocalField[2]/65536.0f;
+            break;
+        case ML_RELATIVE_QUATERNION:            
+            data[0] = (float)mlxData.mlRelativeQuat[0]/1073741824.0f;
+            data[1] = (float)mlxData.mlRelativeQuat[1]/1073741824.0f;
+            data[2] = (float)mlxData.mlRelativeQuat[2]/1073741824.0f;
+            data[3] = (float)mlxData.mlRelativeQuat[3]/1073741824.0f;
+            break;
         default:
             return ML_ERROR_INVALID_PARAMETER;
             break;
@@ -1624,12 +1708,19 @@ tMLError MLGetFloatArray(int dataSet, float *data)
     return result;
 }
 
-
 /**
  *  @brief  used to set an array of motion sensor data.
+ *          Handles the following data sets:
+ *          - ML_GYRO_BIAS
+ *          - ML_ACCEL_BIAS
+ *          - ML_MAG_BIAS
+ *          - ML_GYRO_TEMP_SLOPE
  *
  *          For more details about the use of the data sets
  *          please refer to the documentation of MLSetFloatArray().
+ *
+ *          Please also refer to the provided "9-Axis Sensor Fusion 
+ *          Application Note" document provided.
  *
  *  @pre    MLDmpOpen() or 
  *          MLDmpPedometerStandAloneOpen() 
@@ -1645,63 +1736,63 @@ tMLError MLSetArray(int dataSet, long* data)
     INVENSENSE_FUNC_START;
     tMLError result;
     unsigned char regs[12] = {0};
-    unsigned char maxVal = 0;
-    unsigned char tmpPtr = 0;
-    unsigned char tmpSign = 0;
     unsigned char i = 0;
     unsigned char j = 0;
     long sf = 0;
     long biasTmp;
-    struct mldl_cfg *mldl_cfg = MLDLGetCfg();    
+    short offset[MPU_NUM_AXES];
+    struct mldl_cfg *mldl_cfg = MLDLGetCfg();
 
     switch (dataSet) {
-        case ML_GYRO_BIAS:          // internal
-            mlxData.mlBias[0] = data[0];            
+        case ML_GYRO_BIAS:  // internal
+            mlxData.mlBias[0] = data[0];
             mlxData.mlBias[1] = data[1];
-            mlxData.mlBias[2] = data[2];            
-            if (mldl_cfg->trim!=0) {
-                sf = 2000*131/mldl_cfg->trim;
+            mlxData.mlBias[2] = data[2];
+            if (mldl_cfg->trim != 0) {
+                sf = 2000 * 131 / mldl_cfg->trim;
             } else {
                 sf = 2000;
             }
-            for (i=0; i<3; i++) {
-                biasTmp = -mlxData.mlBias[i]/sf;
-                if (biasTmp<0) biasTmp+=65536L;
-                regs[1+2*i]   = (unsigned char)((biasTmp>>8) & 0xff);
-                regs[1+2*i+1] = (unsigned char)( biasTmp     & 0xff);
+            for (i = 0; i < MPU_NUM_AXES; i++) {
+                biasTmp = -mlxData.mlBias[i] / sf;
+                if (biasTmp < 0) 
+                    biasTmp += 65536L;
+                offset[i] = (short)biasTmp;
             }
-            regs[0] = MPUREG_X_OFFS_USRH;
-            result = MLSLSerialWrite(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
-                                     7, regs);
+            result = MLDLSetOffset((unsigned short*)offset);
             ERROR_CHECK(result);
             break;
 
-        case ML_ACCEL_BIAS:         // internal
+        case ML_ACCEL_BIAS:         /* internal */
             mlxData.mlBias[3] = data[0];
             mlxData.mlBias[4] = data[1];
-            mlxData.mlBias[5] = data[2];            
-            for (i=0; i<3; i++) {
-                if (mlxData.mlAccelSens!=0) {
-                    long long tmp64 = 0;                        
-                    for (j=0; j<3; j++) {
-                        tmp64 += (long long)mlxData.mlBias[j+3]*mlxData.mlAccelCal[i*3+j];                                             
-                    }                   
-                    biasTmp = (long)(tmp64/mlxData.mlAccelSens);                      
-                    biasTmp = biasTmp*8192/mlxData.mlAccelSens;                    
+            mlxData.mlBias[5] = data[2];
+            for (i = 0; i < 3; i++) {
+                if (mlxData.mlAccelSens != 0) {
+                    long long tmp64 = 0;
+                    for (j = 0; j < 3; j++) {
+                        tmp64 += (long long)mlxData.mlBias[j+3] *
+                                            mlxData.mlAccelCal[i*3+j];
+                    }
+                    biasTmp = (long)(tmp64 / mlxData.mlAccelSens);
+                    biasTmp = biasTmp * 8192 / mlxData.mlAccelSens;
                 } else {
                     biasTmp = 0;
                 }
-                if (biasTmp<0) biasTmp+=65536L;                
-                regs[2*i] = (unsigned char)(biasTmp/256);
-                regs[2*i+1] = (unsigned char)(biasTmp%256);
+                if (biasTmp < 0) biasTmp += 65536L;
+                regs[2*i+0] = (unsigned char)(biasTmp / 256);
+                regs[2*i+1] = (unsigned char)(biasTmp % 256);
             }            
-            result = MLDLSetMemoryMPU(KEY_D_1_8,  2, &regs[0] );  ERROR_CHECK(result);
-            result = MLDLSetMemoryMPU(KEY_D_1_10, 2, &regs[2] );  ERROR_CHECK(result);
-            result = MLDLSetMemoryMPU(KEY_D_1_2,  2, &regs[4] );  ERROR_CHECK(result);
+            result = MLDLSetMemoryMPU(KEY_D_1_8, 2, &regs[0]);
+            ERROR_CHECK(result);
+            result = MLDLSetMemoryMPU(KEY_D_1_10, 2, &regs[2]);
+            ERROR_CHECK(result);
+            result = MLDLSetMemoryMPU(KEY_D_1_2, 2, &regs[4]);
+            ERROR_CHECK(result);
             break;
 
         case ML_MAG_BIAS:
-            CompassSetBias( data );                        
+            CompassSetBias( data );
             mlxData.mlInitMagBias[0] = 0;
             mlxData.mlInitMagBias[1] = 0;
             mlxData.mlInitMagBias[2] = 0;
@@ -1710,13 +1801,13 @@ tMLError MLSetArray(int dataSet, long* data)
             mlxData.mlCompassState = SF_STARTUP_SETTLE;
             break;      
 
-        case ML_GYRO_TEMP_SLOPE:         // internal    
+        case ML_GYRO_TEMP_SLOPE:         /* internal */
             mlxData.mlFactoryTempComp = 1;
-            mlxData.mlTempSlope[0] = data[0];            
+            mlxData.mlTempSlope[0] = data[0];
             mlxData.mlTempSlope[1] = data[1];
             mlxData.mlTempSlope[2] = data[2];
             for (i = 0; i < MPU_NUM_AXES; i++) {
-                sf = -mlxData.mlTempSlope[i]/1118;
+                sf = -mlxData.mlTempSlope[i] / 1118;
                 if (sf>127) {
                     sf-=256;
                 }
@@ -1725,7 +1816,17 @@ tMLError MLSetArray(int dataSet, long* data)
             result = MLDLSetOffsetTC(regs);
             ERROR_CHECK(result);
             break;
-
+        case ML_LOCAL_FIELD:
+            mlxData.mlLocalField[0] = data[0];
+            mlxData.mlLocalField[1] = data[1];
+            mlxData.mlLocalField[2] = data[2];
+            mlxData.mlNewLocalField = 1;
+            break;
+        case ML_MAG_SCALE:
+            mlxData.mlMagScale[0] = data[0];
+            mlxData.mlMagScale[1] = data[1];
+            mlxData.mlMagScale[2] = data[2];
+            break;
         default:
             return ML_ERROR_INVALID_PARAMETER;
             break;
@@ -1734,35 +1835,37 @@ tMLError MLSetArray(int dataSet, long* data)
 }
 
 /** 
- *  @brief      Sets up the Accelerometer calibration and scale factor.
+ *  @brief  Sets up the Accelerometer calibration and scale factor.
  *
- *              Please refer to the provided "9-Axis Sensor Fusion Application
- *              Note" document provided.  Section 5, "Sensor Mounting Orientation"
- *              offers a good coverage on the mounting matrices and explains
- *              how to use them.
+ *          Please refer to the provided "9-Axis Sensor Fusion Application
+ *          Note" document provided.  Section 5, "Sensor Mounting Orientation" 
+ *          offers a good coverage on the mounting matrices and explains how 
+ *          to use them.
  *
- *  @pre        MLDmpOpen() or 
- *              MLDmpPedometerStandAloneOpen() and MLDmpStart() 
- *              must <b>NOT</b> have been called.
+ *  @pre    MLDmpOpen() or MLDmpPedometerStandAloneOpen().
+ *  @pre    MLDmpStart() must <b>NOT</b> have been called.
  *
- *  @param[in]  range   
- *                      The range of the accelerometers in g's. An accelerometer
- *                      that has a range of +2g's to -2g's should pass in 2.
- *  @param[in]  orientation 
- *                      A 9 element matrix that represents how the accelerometers
- *                      are oriented with respect to the device they are mounted in
- *                      and the reference axis system.
- *                      A typical set of values are {1, 0, 0, 0, 1, 0, 0, 0, 1}. This
- *                      example corresponds to a 3 x 3 identity matrix.
+ *  @see    MLSetGyroCalibration().
+ *  @see    MLSetMagCalibration().
+ *
+ *  @param[in]  range
+ *                  The range of the accelerometers in g's. An accelerometer
+ *                  that has a range of +2g's to -2g's should pass in 2.
+ *  @param[in]  orientation
+ *                  A 9 element matrix that represents how the accelerometers
+ *                  are oriented with respect to the device they are mounted 
+ *                  in and the reference axis system.
+ *                  A typical set of values are {1, 0, 0, 0, 1, 0, 0, 0, 1}.
+ *                  This example corresponds to a 3 x 3 identity matrix.
  *                      
- *  @return     ML_SUCCESS if successful; a non-zero error code otherwise.
+ *  @return ML_SUCCESS if successful; a non-zero error code otherwise.
  */
 tMLError MLSetAccelCalibration(float range, signed char *orientation)
 {
     INVENSENSE_FUNC_START;
     float cal[9];
     float scale = range / 32768.f;
-    int kk, ii;
+    int kk;
     unsigned long sf;
     tMLError result;
     unsigned char regs[4] = {0, 0, 0 ,0};
@@ -1788,50 +1891,46 @@ tMLError MLSetAccelCalibration(float range, signed char *orientation)
         mlxData.mlAccelSens = 0;
     }
 
-    for( kk=0; kk<9; ++kk ) {
-        cal[kk] = scale * orientation[kk];
-        mlxData.mlAccelCal[kk] = (long)(cal[kk] * (float)(1L << 30));
-    }
-
-    {
+    if ( mldl_cfg->accel->id ) {
 #ifdef M_HW
-        unsigned char tmp[3] = {DINA0C,
-                                DINAC9,
-                                DINA2C};
+        unsigned char tmp[3] = {DINA0C, DINAC9, DINA2C};
 #else
-        unsigned char tmp[3] = {DINA4C,
-                                DINACD,
-                                DINA6C};
+        unsigned char tmp[3] = {DINA4C, DINACD, DINA6C};
 #endif
-
         struct mldl_cfg *mldl_cfg = MLDLGetCfg();
-        unsigned char regs[12] = {0};
-        unsigned char tmpPtr = 0;
+        unsigned char regs[3];
+        unsigned short orient;
 
-        regs[3] = DINA26;
-        regs[4] = DINA46;
-        regs[5] = DINA66;
-        for (ii=0; ii<3; ii++) {
-            for (kk = 0; kk < 3; kk++) {
-                if (orientation[3 * ii + kk]) {
-                    break;
-                }
-            }
-            if (kk >= 3) {
-                // Invalid orientation
-                return ML_ERROR_INVALID_PARAMETER;
-            }
-
-            regs[ii] = tmp[kk];
-            if (orientation[3*ii + kk] < 0)
-                regs[ii+3] |= 0x01;
+        for( kk=0; kk<9; ++kk ) {
+            cal[kk] = scale * orientation[kk];
+            mlxData.mlAccelCal[kk] = (long)(cal[kk] * (float)(1L << 30));
         }
 
-        if ((ACCEL_ID_MMA8450 != mldl_cfg->accel->id) && 
-            (ACCEL_ID_MMA8451 != mldl_cfg->accel->id)) {
-            result = MLDLSetMemoryMPU(KEY_FCFG_2, 3, regs );
+        orient = MLOrientationMatrixToScalar( orientation );
+        regs[0] = tmp[orient & 3];
+        regs[1] = tmp[(orient>>3) & 3];
+        regs[2] = tmp[(orient>>6) & 3];
+        result = MLDLSetMemoryMPU(KEY_FCFG_2, 3, regs );
+        ERROR_CHECK(result);
+
+        regs[0] = DINA26;
+        regs[1] = DINA46;
+        regs[2] = DINA66;
+        if (orient & 4)
+            regs[0] |= 1;
+        if (orient & 0x20)
+            regs[1] |= 1;
+        if (orient & 0x100)
+            regs[2] |= 1;
+
+        result = MLDLSetMemoryMPU(KEY_FCFG_7, 3, regs );
+        ERROR_CHECK(result);
+
+        if ( mldl_cfg->accel->id == ACCEL_ID_MMA845X ) {
+            result = FreescaleSensorFusion16bit( orient );
             ERROR_CHECK(result);
-            result = MLDLSetMemoryMPU(KEY_FCFG_7, 3, &regs[3] );
+        } else if ( mldl_cfg->accel->id == ACCEL_ID_MMA8450 ) {
+            result = FreescaleSensorFusion8bit( orient );
             ERROR_CHECK(result);
         }
     }
@@ -1856,29 +1955,32 @@ tMLError MLSetAccelCalibration(float range, signed char *orientation)
 }
 
 /**
- *  @brief      Sets up the Gyro calibration and scale factor.
+ *  @brief  Sets up the Gyro calibration and scale factor.
  *
- *              Please refer to the provided "9-Axis Sensor Fusion Application
- *              Note" document provided.  Section 5, "Sensor Mounting Orientation"
- *              offers a good coverage on the mounting matrices and explains
- *              how to use them.
+ *          Please refer to the provided "9-Axis Sensor Fusion Application
+ *          Note" document provided.  Section 5, "Sensor Mounting Orientation"
+ *          offers a good coverage on the mounting matrices and explains
+ *          how to use them.
  *
- *  @pre        MLDmpOpen() or MLDmpPedometerStandAloneOpen().
- *  @pre        MLDmpStart() must have <b>NOT</b> been called.
+ *  @pre    MLDmpOpen() or MLDmpPedometerStandAloneOpen().
+ *  @pre    MLDmpStart() must have <b>NOT</b> been called.
  *
- *  @param[in] range 
+ *  @see    MLSetAccelCalibration().
+ *  @see    MLSetMagCalibration().
+ *
+ *  @param[in]  range 
  *                  The range of the gyros in degrees per second. A gyro
  *                  that has a range of +2000 dps to -2000 dps should pass in 
  *                  2000.
  *  @param[in] orientation 
  *                  A 9 element matrix that represents how the gyro are oriented 
- *                  with respect to the device they are mounted in. A typical set 
- *                  of values are {1, 0, 0, 0, 1, 0, 0, 0, 1}. This example corresponds 
- *                  to a 3 x 3 identity matrix.
+ *                  with respect to the device they are mounted in. A typical 
+ *                  set of values are {1, 0, 0, 0, 1, 0, 0, 0, 1}. This 
+ *                  example corresponds to a 3 x 3 identity matrix.
  *
- *  @return    ML_SUCCESS if successful or Non-zero error code otherwise.
+ *  @return ML_SUCCESS if successful or Non-zero error code otherwise.
  */
-tMLError MLSetGyroCalibration( float range, signed char *orientation )
+tMLError MLSetGyroCalibration(float range, signed char *orientation)
 {
     INVENSENSE_FUNC_START;
 
@@ -1930,12 +2032,12 @@ tMLError MLSetGyroCalibration( float range, signed char *orientation )
             tmpSign = 0;
             if (mlxData.mlGyroOrient[0+3*i]<0)
                 tmpSign = 1;
-            if (abs(mlxData.mlGyroOrient[1+3*i])>abs(mlxData.mlGyroOrient[0+3*i])) {
+            if (ABS(mlxData.mlGyroOrient[1+3*i])>ABS(mlxData.mlGyroOrient[0+3*i])) {
                 maxVal = 1;
                 if (mlxData.mlGyroOrient[1+3*i]<0)
                     tmpSign = 1;
             }
-            if (abs(mlxData.mlGyroOrient[2+3*i])>abs(mlxData.mlGyroOrient[1+3*i])) {
+            if (ABS(mlxData.mlGyroOrient[2+3*i])>ABS(mlxData.mlGyroOrient[1+3*i])) {
                 tmpSign = 0;
                 maxVal = 2;
                 if (mlxData.mlGyroOrient[2+3*i]<0)
@@ -1986,37 +2088,42 @@ tMLError MLSetGyroCalibration( float range, signed char *orientation )
 }
 
 /**
- *  @brief      Sets up the Compass calibration and scale factor.
+ *  @brief  Sets up the Compass calibration and scale factor.
  *
- *              Please refer to the provided "9-Axis Sensor Fusion Application
- *              Note" document provided.  Section 5, "Sensor Mounting Orientation"
- *              offers a good coverage on the mounting matrices and explains
- *              how to use them.
+ *          Please refer to the provided "9-Axis Sensor Fusion Application
+ *          Note" document provided.  Section 5, "Sensor Mounting Orientation"
+ *          offers a good coverage on the mounting matrices and explains
+ *          how to use them.
  *
- *  @pre        MLDmpOpen() or MLDmpPedometerStandAloneOpen().
- *  @pre        MLDmpStart() must have <b>NOT</b> been called.
- *  @see        MLSetGyroCalibration 
- *  @see        MLSetAccelCalibration.
+ *  @pre    MLDmpOpen() or MLDmpPedometerStandAloneOpen().
+ *  @pre    MLDmpStart() must have <b>NOT</b> been called.
+ *
+ *  @see    MLSetGyroCalibration().
+ *  @see    MLSetAccelCalibration().
  *
  *  @param[in] range 
  *                  The range of the compass.
  *  @param[in] orientation 
- *                  A 9 element matrix that represents how the compass is oriented 
- *                  with respect to the device they are mounted in. A typical set 
- *                  of values are {1, 0, 0, 0, 1, 0, 0, 0, 1}. This example corresponds 
- *                  to a 3 x 3 identity matrix. The matrix describes how to go from the chip
- *                  mounting to the body of the device.
+ *                  A 9 element matrix that represents how the compass is 
+ *                  oriented with respect to the device they are mounted in. 
+ *                  A typical set of values are {1, 0, 0, 0, 1, 0, 0, 0, 1}. 
+ *                  This example corresponds to a 3 x 3 identity matrix. 
+ *                  The matrix describes how to go from the chip mounting to 
+ *                  the body of the device.
  *
- *  @return    ML_SUCCESS if successful or Non-zero error code otherwise.
+ *  @return ML_SUCCESS if successful or Non-zero error code otherwise.
  */
-tMLError MLSetMagCalibration( float range, signed char *orientation )
+tMLError MLSetMagCalibration(float range, signed char *orientation)
 {
     INVENSENSE_FUNC_START;
     float cal[9];
     float scale = range / 32768.f;
     int kk;
+    unsigned short compassId = 0;
 
-    if (CompassGetId() == COMPASS_ID_YAS529) {
+    compassId = CompassGetId();
+
+    if ((compassId == COMPASS_ID_YAS529) || (compassId == COMPASS_ID_HMC5883) || (compassId == COMPASS_ID_LSM303)) {
         scale /= 32.0f;
     }
 
@@ -2054,11 +2161,14 @@ tMLError MLSetMagCalibration( float range, signed char *orientation )
 
 /**
  *  @brief  used to set an array of motion sensor data.
+ *          Handles various data sets:
+ *          - ML_GYRO_BIAS
+ *          - ML_ACCEL_BIAS
+ *          - ML_MAG_BIAS
+ *          - ML_GYRO_TEMP_SLOPE
  *
  *          Please refer to the provided "9-Axis Sensor Fusion Application
- *          Note" document provided.  Section 5, "Sensor Mounting Orientation"
- *          offers a good coverage on the mounting matrices and explains
- *          how to use them.
+ *          Note" document provided.
  *
  *  @pre    MLDmpOpen() or 
  *          MLDmpPedometerStandAloneOpen() 
@@ -2095,7 +2205,17 @@ tMLError MLSetFloatArray(int dataSet, float *data)
             for (i=0; i<3; i++) {                
                 arrayTmp[i] = (long)(data[i]*65536.f);            
             }                                  
-            break;        
+            break;
+        case ML_LOCAL_FIELD:         // internal     
+            for (i=0; i<3; i++) {                
+                arrayTmp[i] = (long)(data[i]*65536.f);            
+            }                                  
+            break; 
+        case ML_MAG_SCALE:         // internal            
+            for (i=0; i<3; i++) {                
+                arrayTmp[i] = (long)(data[i]*65536.f);            
+            }                                  
+            break;
         default:
             break;
     }
@@ -2107,7 +2227,7 @@ tMLError MLSetFloatArray(int dataSet, float *data)
 * @internal
 * @brief Sets the Gyro Dead Zone based upon LPF filter settings and Control setup.
 */
-tMLError MLSetDeadZone()
+tMLError MLSetDeadZone(void)
 {
     unsigned char reg;
     tMLError result;
@@ -2116,13 +2236,17 @@ tMLError MLSetDeadZone()
     if (mlCtrlParams.functions & ML_DEAD_ZONE) {
         reg = 0x08;
     } else {
+#ifndef M_HW
         if (mlParams.biasUpdateFunc & ML_BIAS_FROM_LPF) {
             reg = 0x2;
         } else {
             reg = 0;
         }
+#else
+        reg = 0;
+#endif
     }
-
+    
     result = MLDLSetMemoryMPU(KEY_D_0_163, 1, &reg);   ERROR_CHECK(result);
     return result;
 }
@@ -2159,15 +2283,21 @@ tMLError MLSetBiasUpdateFunc(unsigned short function)
     tMLError result = ML_SUCCESS;
     struct mldl_cfg *mldl_cfg = MLDLGetCfg();
 
-    if ( MLGetState() != ML_STATE_DMP_OPENED )
-        return ML_ERROR_SM_IMPROPER_STATE;      
+    if (MLGetState() != ML_STATE_DMP_OPENED)
+        return ML_ERROR_SM_IMPROPER_STATE;
 
+    /* do not allow progressive no motion bias tracker to run - 
+       it's not fully debugged */
+    function &= ~ML_PROGRESSIVE_NO_MOTION; // FIXME, workaround
+    MPL_LOGV("forcing disable of PROGRESSIVE_NO_MOTION bias tracker\n");
+        
     /*--- remove magnetic components from bias tracking 
           if there is no compass ---*/
     if ( !CompassGetPresent() ) {
-
-        function &= ~(ML_MAG_BIAS_FROM_GYRO|ML_MAG_BIAS_FROM_MOTION);
-    } 
+        function &= ~(ML_MAG_BIAS_FROM_GYRO | ML_MAG_BIAS_FROM_MOTION);
+    } else {
+        function &= ~(ML_BIAS_FROM_LPF);
+    }
     
     mlParams.biasUpdateFunc = function;
 
@@ -2182,25 +2312,25 @@ tMLError MLSetBiasUpdateFunc(unsigned short function)
         regs[2] = DINA35;
         regs[3] = DINA3D;
     }
-    result = MLDLSetMemoryMPU(KEY_FCFG_5, 4, regs);   ERROR_CHECK(result);
-    result = MLSetDeadZone();                         ERROR_CHECK(result);
+    result = MLDLSetMemoryMPU(KEY_FCFG_5, 4, regs);
+    ERROR_CHECK(result);
+    result = MLSetDeadZone();
+    ERROR_CHECK(result);
 
-    if ((mlParams.biasUpdateFunc & ML_BIAS_FROM_GRAVITY) && !CompassGetPresent()) {
-        regs[0] = DINAA0+5;
-        regs[1] = DINA90+7;
-        regs[2] = DINA80+10;
+    if ((mlParams.biasUpdateFunc & ML_BIAS_FROM_GRAVITY) &&
+        !CompassGetPresent()) {
+        result = FIFOSetGyroDataSource(ML_GYRO_FROM_QUATERNION);
+        ERROR_CHECK(result);
     } else {
-        regs[0] = DINA28;
-        regs[1] = DINA4C;
-        regs[2] = DINA6C;
-    }
-    result = MLDLSetMemoryMPU(KEY_CFG_2, 3, regs);   ERROR_CHECK(result);
-             
+        result = FIFOSetGyroDataSource(ML_GYRO_FROM_RAW);
+        ERROR_CHECK(result);
+    }             
 
-    if ((mldl_cfg->offset_tc[0]!=0) ||
-        (mldl_cfg->offset_tc[1]!=0) ||
-        (mldl_cfg->offset_tc[2]!=0)) {
-            mlxData.mlFactoryTempComp = 1;
+    mlxData.mlFactoryTempComp = 0; // FIXME, workaround
+    if ((mldl_cfg->offset_tc[0] != 0) ||
+        (mldl_cfg->offset_tc[1] != 0) ||
+        (mldl_cfg->offset_tc[2] != 0)) {
+        mlxData.mlFactoryTempComp = 1;
     }
 
     if (mlxData.mlFactoryTempComp == 0) {
@@ -2213,6 +2343,8 @@ tMLError MLSetBiasUpdateFunc(unsigned short function)
         }
     } else {
         mlParams.biasUpdateFunc &= ~ML_LEARN_BIAS_FROM_TEMPERATURE;
+        MPL_LOGV("factory temperature compensation coefficients available - "
+                 "disabling ML_LEARN_BIAS_FROM_TEMPERATURE\n");
     }
 
     /*---- hard requirement for using bias tracking BIAS_FROM_GRAVITY, relying on
@@ -2225,8 +2357,45 @@ tMLError MLSetBiasUpdateFunc(unsigned short function)
         FIFOSendAccel(ML_ALL, ML_32_BIT);
         FIFOSendGyro(ML_ALL, ML_32_BIT);
     }
+
+#ifdef M_HW
+    if (mlParams.biasUpdateFunc &  ML_BIAS_FROM_NO_MOTION ) {
+        result = MLTurnOnBiasFromNoMotion();
+        ERROR_CHECK(result);
+    } else {
+        result = MLTurnOffBiasFromNoMotion();
+        ERROR_CHECK(result);
+    }
+#endif
+
     return result;
 }
+#ifdef M_HW
+/** Turns on the feature to compute gyro bias from No Motion
+*/
+tMLError MLTurnOnBiasFromNoMotion()
+{
+    tMLError result;
+    unsigned char regs[12]={0xc2,0xc5,0xc7,0xb8,0xa2,0xdf,0xdf,0xdf,0xa3,0xdf,0xdf,0xdf};
+    mlParams.biasUpdateFunc |= ML_BIAS_FROM_NO_MOTION;
+    result = MLDLSetMemoryMPU(KEY_CFG_MOTION_BIAS, 12, regs);
+    return result;
+}
+
+/** Turns off the feature to compute gyro bias from No Motion
+*/
+tMLError MLTurnOffBiasFromNoMotion()
+{
+    tMLError result;
+    unsigned char regs[12]={0xde,0xdf,0xdf,0xb8,0xa2,0xa2,0xa2,0xa2,0xa3,0xa3,0xa3,0xa3};
+    unsigned char zero[12]={0,0,0,0,0,0,0,0,0,0,0,0};
+    mlParams.biasUpdateFunc &= ~ML_BIAS_FROM_NO_MOTION;
+    result = MLDLSetMemoryMPU(KEY_CFG_MOTION_BIAS, 12, regs);
+    ERROR_CHECK(result);
+    result = MLDLSetMemoryMPU(KEY_D_2_96, 12, zero);
+    return result;
+}
+#endif
 
 /**
  *  @brief  MLSetMotionCallback is used to register a callback function that
@@ -2275,9 +2444,8 @@ int MLGetMotionState(void)
  *  @brief  MLSetNoMotionThresh is used to set the threshold for
  *          detecting ML_NO_MOTION
  *
- *  @pre    MLDmpOpen() or 
- *          MLDmpPedometerStandAloneOpen() and MLDmpStart() 
- *          must <b>NOT</b> have been called.
+ *  @pre    MLDmpOpen() or MLDmpPedometerStandAloneOpen() must have
+ *          been called. 
  *
  *  @param  thresh  A threshold scaled in degrees per second.                  
  *                  
@@ -2286,35 +2454,54 @@ int MLGetMotionState(void)
 tMLError MLSetNoMotionThresh(float thresh)
 {
     tMLError result = ML_SUCCESS;
-    long tmp;
     unsigned char regs[4] = {0};
+    long tmp;
     INVENSENSE_FUNC_START;
 
-    tmp = (long)(thresh*thresh*2.045f);
-    if (tmp<0) {
+    tmp = (long)(thresh * thresh * 2.045f);
+    if (tmp < 0) {
         return ML_ERROR;
-    } else if (tmp>8180000L) {
+    } else if (tmp > 8180000L) {
         return ML_ERROR;
     }
     mlxData.mlNoMotionThreshold = tmp;
 
-    regs[0] = (unsigned char)(tmp>>24);
-    regs[1] = (unsigned char)((tmp>>16)&0xff);
-    regs[2] = (unsigned char)((tmp>>8)&0xff);
-    regs[3] = (unsigned char)(tmp&0xff);        
+    regs[0] = (unsigned char)( tmp >> 24);
+    regs[1] = (unsigned char)((tmp >> 16) & 0xff);
+    regs[2] = (unsigned char)((tmp >> 8)  & 0xff);
+    regs[3] = (unsigned char)( tmp        & 0xff);        
     
-    result = MLDLSetMemoryMPU( KEY_D_1_108, 4, regs);
-    
+    result = MLDLSetMemoryMPU(KEY_D_1_108, 4, regs);
+    ERROR_CHECK(result);
+    result = MLResetMotion();
     return result;
 }
+/**
+ *  @brief  MLSetNoMotionThreshAccel is used to set the threshold for
+ *          detecting ML_NO_MOTION with accelerometers when Gyros have
+ *          been turned off
+ *
+ *  @pre    MLDmpOpen() or MLDmpPedometerStandAloneOpen() must have
+ *          been called. 
+ *
+ *  @param  thresh  A threshold in g's scaled by 2^32                  
+ *                  
+ *  @return ML_SUCCESS if successful or Non-zero error code otherwise.
+ */
+tMLError MLSetNoMotionThreshAccel(long thresh)
+{
+    INVENSENSE_FUNC_START;
 
+    mlxData.mlNoMotionAccelThreshold = thresh;
+
+    return ML_SUCCESS;
+}
 /**
  *  @brief  MLSetNoMotionTime is used to set the time required for
  *          detecting ML_NO_MOTION
  *
- *  @pre    MLDmpOpen() or 
- *          MLDmpPedometerStandAloneOpen() and MLDmpStart() 
- *          must <b>NOT</b> have been called.
+ *  @pre    MLDmpOpen() or MLDmpPedometerStandAloneOpen() must have
+ *          been called. 
  *
  *  @param  time    A time in seconds.                  
  *                  
@@ -2328,27 +2515,30 @@ tMLError MLSetNoMotionTime(float time)
     
     INVENSENSE_FUNC_START;
 
-    tmp = (long)(time*200);    
-    if (tmp<0) {
+    tmp = (long)(time * 200);    
+    if (tmp < 0) {
         return ML_ERROR;
-    } else if (tmp>65535L) {
+    } else if (tmp > 65535L) {
         return ML_ERROR;
     }
     mlxData.mlMotionDuration = (unsigned short)tmp;
     
-    regs[0] = (unsigned char)((mlxData.mlMotionDuration>>8) & 0xff);
-    regs[1] = (unsigned char)( mlxData.mlMotionDuration     & 0xff);
-    result = MLDLSetMemoryMPU( KEY_D_1_106, 2, regs);
-    
+    regs[0] = (unsigned char)((mlxData.mlMotionDuration >> 8) & 0xff);
+    regs[1] = (unsigned char)(mlxData.mlMotionDuration & 0xff);
+    result = MLDLSetMemoryMPU(KEY_D_1_106, 2, regs);
+    ERROR_CHECK(result);
+    result = MLResetMotion();
     return result;
 }
 
 /**
  *  @brief  MLVersion is used to get the ML version.
  *
- *  @note MLVersion can be called at any time.
+ *  @pre    MLVersion can be called at any time.
+ *
  *  @param  version     MLVersion writes the ML version
  *                      string pointer to version.
+ *
  *  @return ML_SUCCESS if successful or Non-zero error code otherwise.
  */
 tMLError MLVersion(unsigned char **version)
@@ -2362,37 +2552,21 @@ tMLError MLVersion(unsigned char **version)
 
 /** 
  * @brief Check for the presence of the gyro sensor.
- * @return  a boolean value (true if the gyro is present)
+ *
+ * This is not a physical check but a logical check and the value can change
+ * dynamically based on calls to MLSetMPUSensors().
+ *
+ * @return  TRUE if the gyro is enabled FALSE otherwise.
  */
 int MLGetGyroPresent(void)
 {
-    static int checked=0;
-    static int present=1;
-    if (mlxData.mlGyroSens==0) {
-        return 0;
-    }
-#ifdef ML_USE_DMP_SIM
-    /* actually check to see if the MPU is present */
-    if(!checked) {
-        unsigned char d;
-        unsigned short res = MLSLSerialRead(MLSerialGetHandle(), MLDGetMPUSlaveAddr(), 0x00, 1, &d);
-
-        if(res == ML_SUCCESS) {
-            present = 1;
-        } else {
-            present = 0;
-        }
-        checked = 1;
-    }
-    return present;
-#else
-    return 1;
-#endif
+    return MLDLGetCfg()->requested_sensors & (ML_X_GYRO | ML_Y_GYRO |ML_Z_GYRO);
 }
 
 static unsigned short row2scale( const signed char *row )
 {
     unsigned short b;
+
 
     if ( row[0] > 0 )
         b = 0;
@@ -2431,242 +2605,85 @@ unsigned short MLOrientationMatrixToScalar( const signed char *mtx )
 }
 
 /* Setups up the Freescale 16-bit accel for Sensor Fusion
-* @param[in] mtx Is a transformation matrix that describes how to go from the Chip Orientation
+* @param[in] orient A scalar representation of the orientation 
+*  that describes how to go from the Chip Orientation
 *  to the Board Orientation often times called the Body Orientation in Invensense Documentation.
+*  MLOrientationMatrixToScalar() will turn the transformation matrix into this scalar.
 */
-tMLError FreescaleSensorFusion16bit( const signed char *mtx)
+tMLError FreescaleSensorFusion16bit( unsigned short orient )
 {
-    unsigned char rr[50];
-    unsigned char r1,r2,r3;
-    unsigned short orient;
-    unsigned char rm[3];
-    unsigned char regs2b[3] = {DINA26, DINA46, DINA66};
+    unsigned char rr[3];
     tMLError result;
-    signed char trans[9];
-    uint_fast8_t kk;
-    uint_fast16_t nf;
-    
-    trans[0]=mtx[0];
-    trans[1]=mtx[3];
-    trans[2]=mtx[6];
-    trans[3]=mtx[1];
-    trans[4]=mtx[4];
-    trans[5]=mtx[7];
-    trans[6]=mtx[2];
-    trans[7]=mtx[5];
-    trans[8]=mtx[8];
 
-    orient = MLOrientationMatrixToScalar( trans );
-    
-    // KEY_FCFG_2
-    for (kk=0;kk<3;++kk) {
-        if ( (orient & 3) == kk ) {
-            nf = orient & 4;
-        } else if ( (orient & 0x18) == (kk<<3)) {
-            nf = orient & 0x20;
-        } else {
-            nf = orient & 0x100;
-        }
-        if ( nf )
-            regs2b[kk] |= 1;
-    }
-    
     orient = orient & 0xdb;
-    
-    r1 = DINA4C;
-    r2 = DINACD;
-    r3 = DINA6C;
-    
-    kk=0;
-    rr[kk++]=DINAC1;
-    rr[kk++]=DINAF8+2;
-    rr[kk++]=DINAA0+7;
-    rr[kk++]=DINACE;
-    rr[kk++]=DINAC0;
-    rr[kk++]=DINA90+7;
-    rr[kk++]=DINAA0+9;
-    if ( (orient == 0x11) || (orient == 0x0a) ) {
-        // 
-        rr[kk++]=DINA2E;
-    } else {
-        // 
-        rr[kk++]=DINA2D;
-        rr[kk++]=DINAD8+2;
-        rr[kk++]=DINA20;
-        rr[kk++]=DINAD8;
-    }
-    if ( (orient == 0x42) || (orient == 0x50) ) {
-        // 
-        rr[kk++]=DINA2E;
-    } else {
-        // Fixed bit on YL
-        rr[kk++]=DINA4D;
-        rr[kk++]=DINAD8+2;
-        rr[kk++]=DINA40;
-        rr[kk++]=DINAD8;
-    }
-    if ( (orient == 0x81) || (orient == 0x88) ) {
-        // 
-        rr[kk++]=DINA2E;
-    } else {
-        // 
-        rr[kk++]=DINA6D;
-        rr[kk++]=DINAD8+2;
-        rr[kk++]=DINA60;
-        rr[kk++]=DINAD8;
-    }
-    // 
-    rr[kk++]=DINAC1;
-    rr[kk++]=DINAA0+7;
-    rr[kk++]=DINA68;
-    rr[kk++]=DINAC0;
-    // 
-    rr[kk++]=DINAA0+5;
     switch (orient) {
-    case 0x88:
-        rr[kk++]=DINACE;
-        rr[kk++]=DINACB;
-        rr[kk++]=DINACD;
-        rm[0]=r2;
-        rm[1]=r3;
-        rm[2]=r1;
+    default:
+        // Typically 0x88
+        rr[0] = DINACC;
+        rr[1] = DINACF;
+        rr[2] = DINA0E;
         break;
     case 0x50:
-        rr[kk++]=DINACC;
-        rr[kk++]=DINACF;
-        rr[kk++]=DINACB;
-        rm[0]=r2;
-        rm[1]=r1;
-        rm[2]=r3;
+        rr[0] = DINACE;
+        rr[1] = DINA0E;
+        rr[2] = DINACD;
         break;
     case 0x81:
-        rr[kk++]=DINACC;
-        rr[kk++]=DINACF;
-        rr[kk++]=DINACB;
-        rm[0]=r3;
-        rm[1]=r2;
-        rm[2]=r1;
+        rr[0] = DINACE;
+        rr[1] = DINACB;
+        rr[2] = DINA0E;
         break;
     case 0x11:
-        rr[kk++]=DINACE;
-        rr[kk++]=DINACB;
-        rr[kk++]=DINACD;
-        rm[0]=r1;
-        rm[1]=r2;
-        rm[2]=r3;
+        rr[0] = DINACC;
+        rr[1] = DINA0E;
+        rr[2] = DINACB;
         break;
     case 0x42:
-        rr[kk++]=DINACE;
-        rr[kk++]=DINACB;
-        rr[kk++]=DINACD;
-        rm[0]=r3;
-        rm[1]=r1;
-        rm[2]=r2;
+        rr[0] = DINA0A;
+        rr[1] = DINACF;
+        rr[2] = DINACB;        
         break;
     case 0x0a:
-        rr[kk++]=DINACC;
-        rr[kk++]=DINACF;
-        rr[kk++]=DINACB;
-        rm[0]=r1;
-        rm[1]=r3;
-        rm[2]=r2;
+        rr[0] = DINA0A;
+        rr[1] = DINACB;
+        rr[2] = DINACD;
         break;
-    default:
-        return ML_ERROR; // bad orientation?
     }
-   
-    // Combine 
-    rr[kk++]=DINAA0+9;
-    rr[kk++]=DINA90+5;
-    rr[kk++]=DINA25;
-    rr[kk++]=DINA4D;
-    rr[kk++]=DINA75;
-    // Zero out low 16-bits
-    rr[kk++]=DINAF8+3;
-    rr[kk++]=DINAA0+9;
-    rr[kk++]=DINA90+7;
-    rr[kk++]=DINA2E;
-    rr[kk++]=DINA2E;
-    rr[kk++]=DINA2E;
-
-    result = MLDLSetMemoryMPU(KEY_FCFG_2, 3, rm );      ERROR_CHECK(result);
-    result = MLDLSetMemoryMPU(KEY_FCFG_7, 3, regs2b );     ERROR_CHECK(result);
-    if ( kk != 35 )
-        return ML_ERROR; // bad orientation
-
-    result = MLDLSetMemoryMPU(KEY_FCFG_FSCALE, kk, rr );  ERROR_CHECK(result);
-
-    return result;
-    
+    result = MLDLSetMemoryMPU(KEY_FCFG_AZ, 3, rr );
+    return result; 
 }
 
 /* Setups up the Freescale 8-bit accel for Sensor Fusion
-* @param[in] mtx Is a transformation matrix that describes how to go from the Chip Orientation
+* @param[in] orient A scalar representation of the orientation 
+*  that describes how to go from the Chip Orientation
 *  to the Board Orientation often times called the Body Orientation in Invensense Documentation.
+*  MLOrientationMatrixToScalar() will turn the transformation matrix into this scalar.
 */
-tMLError FreescaleSensorFusion8bit( const signed char *mtx)
+tMLError FreescaleSensorFusion8bit( unsigned short orient )
 {
-    unsigned char regs[35];
-    unsigned short orient,orientSav;
-    unsigned char regs2[3];
-    unsigned char regs2b[3] = {DINA26, DINA46, DINA66};
+    unsigned char regs[27];
     tMLError result;
     uint_fast8_t kk;
-    uint_fast16_t nf;
-    signed char trans[9];
 
-    orient = MLOrientationMatrixToScalar( mtx );
-    orientSav = orient;
-
-    // KEY_FCFG_2
-    for (kk=0;kk<3;++kk) {
-        if ( (orient & 3) == kk ) {
-            regs2[kk] = DINA4C;
-        } else if ( (orient & 0x18) == (kk<<3)) {
-            regs2[kk] = DINACD;
-        } else {
-            regs2[kk]=DINA6C;
-        }
-    }
-    result = MLDLSetMemoryMPU(KEY_FCFG_2, 3, regs2 );      ERROR_CHECK(result);
-
-    trans[0]=mtx[0];
-    trans[1]=mtx[3];
-    trans[2]=mtx[6];
-    trans[3]=mtx[1];
-    trans[4]=mtx[4];
-    trans[5]=mtx[7];
-    trans[6]=mtx[2];
-    trans[7]=mtx[5];
-    trans[8]=mtx[8];
-
-    orient = MLOrientationMatrixToScalar( trans );
-    
-    // KEY_FCFG_2
-    for (kk=0;kk<3;++kk) {
-        if ( (orient & 3) == kk ) {
-            nf = orient & 4;
-        } else if ( (orient & 0x18) == (kk<<3)) {
-            nf = orient & 0x20;
-        } else {
-            nf = orient & 0x100;
-        }
-        if ( nf )
-            regs2b[kk] |= 1;
-    }
-    result = MLDLSetMemoryMPU(KEY_FCFG_7, 3, regs2b );     ERROR_CHECK(result);
-
-    orient = orientSav & 0xdb;
-
+    orient = orient & 0xdb;
     kk = 0;
+
+    regs[kk++] = DINAC3;
+    regs[kk++] = DINA90+14;
+    regs[kk++] = DINAA0+9;
+    regs[kk++] = DINA3E;
+    regs[kk++] = DINA5E;
+    regs[kk++] = DINA7E;
+    
+    regs[kk++] = DINAC2;
     regs[kk++] = DINAA0+9;
     regs[kk++] = DINA90+9;
+    regs[kk++] = DINAF8+2;
 
     switch (orient) {
-    case 0x88:
-        regs[kk++] = DINAF8+1;
+    default:
+        // Typically 0x88
         regs[kk++] = DINACB;
-        regs[kk++] = DINAF8+2;
 
         regs[kk++] = DINA54;
         regs[kk++] = DINA50;
@@ -2680,9 +2697,7 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
         regs[kk++] = DINACD;
         break;
     case 0x50:
-        regs[kk++] = DINAF8+1;
         regs[kk++] = DINACB;
-        regs[kk++] = DINAF8+2;
 
         regs[kk++] = DINACF;
 
@@ -2696,7 +2711,6 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
         regs[kk++] = DINA78;
         break;
     case 0x81:
-        regs[kk++] = DINAF8+2;
         regs[kk++] = DINA2C;
         regs[kk++] = DINA28;
         regs[kk++] = DINA28;
@@ -2711,8 +2725,7 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
         regs[kk++] = DINACB;
         break;
     case 0x11:
-        regs[kk++] = DINAF8+2;
-        regs[kk++] = DINA7C;
+        regs[kk++] = DINA2C;
         regs[kk++] = DINA28;
         regs[kk++] = DINA28;
         regs[kk++] = DINA28;
@@ -2720,21 +2733,14 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
         regs[kk++] = DINA28;
         regs[kk++] = DINA28;
         regs[kk++] = DINA28; 
-        
+        regs[kk++] = DINACB;
         regs[kk++] = DINACF;
-
-        regs[kk++] = DINACD;
         break;
     case 0x42:
-        regs[kk++] = DINAF8+1;
-        regs[kk++] = DINACB;
-        regs[kk++] = DINAF8+2;
-
         regs[kk++] = DINACF;
+        regs[kk++] = DINACD;
 
-        regs[kk++] = DINACB;
-
-        regs[kk++] = DINA78;
+        regs[kk++] = DINA7C;
         regs[kk++] = DINA78;
         regs[kk++] = DINA78;
         regs[kk++] = DINA78;
@@ -2744,7 +2750,6 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
         regs[kk++] = DINA78;
         break;
     case 0x0a:
-        regs[kk++] = DINAF8+2;
         regs[kk++] = DINACD;
 
         regs[kk++] = DINA54;
@@ -2758,8 +2763,6 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
         
         regs[kk++] = DINACF;
         break;
-    default:
-        return ML_ERROR; // bad orientation?
     }
 
     regs[kk++] = DINA90+7;
@@ -2769,15 +2772,139 @@ tMLError FreescaleSensorFusion8bit( const signed char *mtx)
     regs[kk++] = DINA0E;
     regs[kk++] = DINA0E;
 
-    while ( kk < 35 ) {
-        regs[kk++] = DINA90+7;
-    }
+    regs[kk++] = DINAF8+1; // filler
 
-    result = MLDLSetMemoryMPU(KEY_FCFG_FSCALE, 35, regs );  ERROR_CHECK(result);
+    result = MLDLSetMemoryMPU(KEY_FCFG_FSCALE, kk, regs );  ERROR_CHECK(result);
 
     return result;
 }
 
-/***************************/
-/**@}*/ /* end of defgroup */
-/***************************/
+/** 
+ * Controlls each sensor and each axis when the motion processing unit is 
+ * running.  When it is not running, simply records the state for later.
+ * 
+ * NOTE: In this version only full sensors controll is allowed.  Independent
+ * axis control will return an error.
+ *
+ * @param sensors Bit field of each axis desired to be turned on or off
+ * 
+ * @return ML_SUCCESS or non-zero error code
+ */
+tMLError MLSetMPUSensors(unsigned long sensors)
+{
+    INVENSENSE_FUNC_START;
+    unsigned char state = MLGetState();
+    struct mldl_cfg *mldl_cfg = MLDLGetCfg();
+    tMLError result;
+    long odr;
+    
+    if (state < ML_STATE_DMP_OPENED)
+        return ML_ERROR_SM_IMPROPER_STATE;  
+
+    if (((sensors & ML_THREE_AXIS_ACCEL) != ML_THREE_AXIS_ACCEL) &&
+        ((sensors & ML_THREE_AXIS_ACCEL) != 0)) {
+        return ML_ERROR_FEATURE_NOT_IMPLEMENTED;
+    }
+    if (((sensors & ML_THREE_AXIS_ACCEL) != 0) && 
+        (mldl_cfg->pdata->accel.get_slave_descr == 0)) {
+        return ML_ERROR_SERIAL_DEVICE_NOT_RECOGNIZED;
+    }
+
+    if (((sensors & ML_THREE_AXIS_COMPASS) != ML_THREE_AXIS_COMPASS) &&
+        ((sensors & ML_THREE_AXIS_COMPASS) != 0)) {
+        return ML_ERROR_FEATURE_NOT_IMPLEMENTED;
+    }
+    if (((sensors & ML_THREE_AXIS_COMPASS) != 0) &&
+        (mldl_cfg->pdata->compass.get_slave_descr == 0)) {
+        return ML_ERROR_SERIAL_DEVICE_NOT_RECOGNIZED;
+    }
+
+    if (((sensors & ML_THREE_AXIS_PRESSURE) != ML_THREE_AXIS_PRESSURE) &&
+        ((sensors & ML_THREE_AXIS_PRESSURE) != 0)) {
+        return ML_ERROR_FEATURE_NOT_IMPLEMENTED;
+    }
+    if (((sensors & ML_THREE_AXIS_PRESSURE) != 0) && 
+        (mldl_cfg->pdata->pressure.get_slave_descr == 0)) {
+        return ML_ERROR_SERIAL_DEVICE_NOT_RECOGNIZED;
+    }
+    
+    /* DMP was off, and is turning on */
+    if (sensors & ML_DMP_PROCESSOR && 
+        !(mldl_cfg->requested_sensors & ML_DMP_PROCESSOR)) {
+        struct ext_slave_config config;
+        long odr;
+        config.key = MPU_SLAVE_CONFIG_ODR_RESUME;
+        config.len = sizeof(long);
+        config.apply = (state == ML_STATE_DMP_STARTED);
+        config.data = &odr;
+
+        odr = (SAMPLING_RATE_HZ(mldl_cfg) * 1000);
+        mpu3050_config_accel(mldl_cfg, MLSerialGetHandle(),
+                             &config);
+
+        config.key = MPU_SLAVE_CONFIG_IRQ_RESUME;
+        odr = MPU_SLAVE_IRQ_TYPE_NONE;
+        mpu3050_config_accel(mldl_cfg, MLSerialGetHandle(),
+                             &config);
+        FIFOHWInit();
+        SetSampleStepSizeMs((MLGetFIFORate() + 1) *
+                            (SAMPLING_PERIOD_US(mldl_cfg) / 1000));
+    }    
+
+    if ( mlxData.modeChange ) {
+        result = mlxData.modeChange(mldl_cfg->requested_sensors, sensors);
+        ERROR_CHECK(result);
+    }
+
+    /* Get the ODR before changing sensors so if we need to match it */
+    odr = GetSampleFrequencyHz();
+    mldl_cfg->requested_sensors = sensors;
+
+    result = MLDLSetGyroPower((unsigned char)(sensors & ML_X_GYRO),
+                              (unsigned char)(sensors & ML_Y_GYRO),
+                              (unsigned char)(sensors & ML_Z_GYRO));
+    ERROR_CHECK(result);
+
+    /* MLDmpStart will turn the sensors on */
+    if (state == ML_STATE_DMP_STARTED) {
+        result = MLDLDmpStart(sensors);
+        ERROR_CHECK(result);
+        result = MLResetMotion();
+        ERROR_CHECK(result);
+        result = MLDLDmpStop(~sensors);
+        ERROR_CHECK(result);
+    }
+
+    if (!(sensors & ML_DMP_PROCESSOR) && (sensors & ML_THREE_AXIS_ACCEL)) {
+        struct ext_slave_config config;
+        config.key = MPU_SLAVE_CONFIG_ODR_RESUME;
+        config.len = sizeof(long);
+        config.apply = (state == ML_STATE_DMP_STARTED);
+        config.data = &odr;
+        odr *= 1000;
+
+        /* Ask for the same frequency */
+        mpu3050_config_accel(mldl_cfg, MLSerialGetHandle(),
+                             &config);
+        mpu3050_get_config_accel(mldl_cfg, MLSerialGetHandle(),
+                                 &config);
+        MPL_LOGI("Actual ODR: %ld Hz\n", odr / 1000);
+        /* Record the actual frequency granted odr is in mHz */
+        SetSampleStepSizeMs((1000L * 1000L) / odr);
+        config.key = MPU_SLAVE_CONFIG_IRQ_RESUME;
+        odr = MPU_SLAVE_IRQ_TYPE_DATA_READY;
+        mpu3050_config_accel(mldl_cfg, MLSerialGetHandle(),
+                             &config);
+    }
+
+    return result;
+}
+void MLSetModeChangeCB( tMLError (*modeChange)(unsigned long, unsigned long) )
+{
+    mlxData.modeChange = modeChange;
+}
+
+/**
+ * @}
+ */
+

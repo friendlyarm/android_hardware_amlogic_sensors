@@ -3,19 +3,11 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
-/***************************************************************************** *
- * $Id: gestureMenu.c 4074 2010-11-16 01:17:47Z nroyer $ 
- ******************************************************************************/
-/**
- * @defgroup 
- * @brief  
- *
- * @{
- *      @file     gestureMenu.c
- *      @brief    
- *
- *
- */
+
+/******************************************************************************
+ * $Id: gestureMenu.c 5032 2011-03-18 02:25:51Z nroyer $ 
+ *****************************************************************************/
+
 #define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <stddef.h>
@@ -23,6 +15,7 @@
 #include <string.h>
 
 #include "ml.h"
+#include "mlmath.h"
 #include "gesture.h"
 #include "orientation.h"
 #include "gestureMenu.h"
@@ -30,6 +23,31 @@
 #undef MPL_LOG_TAG
 #define MPL_LOG_TAG "gest"
 #include "log.h"
+#include "mldl_cfg.h"
+
+static unsigned long sensors[] = {
+    ML_NINE_AXIS,
+    ML_THREE_AXIS_GYRO,
+    ML_DMP_PROCESSOR | ML_THREE_AXIS_ACCEL,
+    ML_THREE_AXIS_ACCEL,
+    ML_DMP_PROCESSOR | ML_THREE_AXIS_COMPASS,
+    ML_THREE_AXIS_COMPASS,
+    ML_SIX_AXIS_GYRO_ACCEL,
+    ML_DMP_PROCESSOR | ML_SIX_AXIS_ACCEL_COMPASS,
+    ML_SIX_AXIS_ACCEL_COMPASS,
+};
+
+static char *sensors_string[] = {
+    "ML_NINE_AXIS",
+    "ML_THREE_AXIS_GYRO",
+    "ML_DMP_PROCESSOR | ML_THREE_AXIS_ACCEL",
+    "ML_THREE_AXIS_ACCEL",
+    "ML_DMP_PROCESSOR | ML_THREE_AXIS_COMPASS",
+    "ML_THREE_AXIS_COMPASS",
+    "ML_SIX_AXIS_GYRO_ACCEL",
+    "ML_DMP_PROCESSOR | ML_SIX_AXIS_ACCEL_COMPASS",
+    "ML_SIX_AXIS_ACCEL_COMPASS",
+};
 
 /** 
  * Prints the menu with the current thresholds
@@ -99,9 +117,20 @@ void PrintGestureMenu(tGestureMenuParams const * const params)
              params->yawRotateThreshold);
     MPL_LOGI("    W (Shift-w): Decrease yaW Rotate threshold\n");
     MPL_LOGI("ORIENTATION PARAMETER:\n");
-    MPL_LOGI("    d          : Increase orientation angle threshold : %5d\n",
+    MPL_LOGI("    d          : Increase orientation angle threshold : %5f\n",
              params->orientationThreshold);
     MPL_LOGI("    D (Shift-d): Decrease orientation angle threshold\n");
+    MPL_LOGI("FIFO RATE:\n");
+    MPL_LOGI("    f          : Increase fifo divider    : %5d\n",
+             MLGetFIFORate());
+    MPL_LOGI("    F (Shift-f): Decrease fifo divider\n");
+    MPL_LOGI("REQUESTED SENSORS:\n");
+    MPL_LOGI("    S (Shift-s): Toggle in use sensors : %s\n",
+             sensors_string[params->sensorsIndex]);
+    MPL_LOGI("    F (Shift-f): Decrease fifo divider\n");
+
+    /* V,v, B,b, Q,q, C,c, G,g, are available letters upper and lowercase */
+    /* S is available */
 
     MPL_LOGI("\n\n");
 }
@@ -127,9 +156,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
     case 'J':  {
         params->xTapThreshold -= 10;
         if (params->xTapThreshold < 0) params->xTapThreshold = 0;
-        result = MLSetTapThreshByAxis(ML_TAP_AXIS_X,params->xTapThreshold);
+        result = MLSetTapThreshByAxis(ML_TAP_AXIS_X, params->xTapThreshold);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetTapThresh returned :%d\n",result);
+            MPL_LOGE("MLSetTapThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetTapThreshByAxis(ML_TAP_AXIS_X, %d)\n",
                  params->xTapThreshold);
@@ -140,9 +169,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
     case 'K':  {
         params->yTapThreshold -= 10;
         if (params->yTapThreshold < 0) params->yTapThreshold = 0;
-        result = MLSetTapThreshByAxis(ML_TAP_AXIS_Y,params->yTapThreshold);
+        result = MLSetTapThreshByAxis(ML_TAP_AXIS_Y, params->yTapThreshold);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetTapThresh returned :%d\n",result);
+            MPL_LOGE("MLSetTapThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetTapThreshByAxis(ML_TAP_AXIS_Y, %d)\n",
                  params->yTapThreshold);
@@ -153,9 +182,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
     case 'I':  {
         params->zTapThreshold -= 10;
         if (params->zTapThreshold < 0) params->zTapThreshold = 0;
-        result = MLSetTapThreshByAxis(ML_TAP_AXIS_Z,params->zTapThreshold);
+        result = MLSetTapThreshByAxis(ML_TAP_AXIS_Z, params->zTapThreshold);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetTapThresh returned :%d\n",result);
+            MPL_LOGE("MLSetTapThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetTapThreshByAxis(ML_TAP_AXIS_Z, %d)\n",
                  params->zTapThreshold);
@@ -169,9 +198,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         if (params->tapTime < 0) params->tapTime = 0;
         result = MLSetTapTime(params->tapTime);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetTapTime returned :%d\n",result);
+            MPL_LOGE("MLSetTapTime returned :%d\n", result);
         }
-        MPL_LOGI("MLSetTapTime(%d)\n",params->tapTime);
+        MPL_LOGI("MLSetTapTime(%d)\n", params->tapTime);
     } break;
     case  'o':
         params->nextTapTime += 20;
@@ -181,9 +210,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         if (params->nextTapTime < 0) params->nextTapTime = 0;
         result = MLSetNextTapTime(params->nextTapTime);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetNextTapTime returned :%d\n",result);
+            MPL_LOGE("MLSetNextTapTime returned :%d\n", result);
         }
-        MPL_LOGI("MLSetNextTapTime(%d)\n",params->nextTapTime);
+        MPL_LOGI("MLSetNextTapTime(%d)\n", params->nextTapTime);
     } break;
     case  'u':
         params->maxTaps += 2;
@@ -193,9 +222,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         if (params->maxTaps < 0) params->maxTaps = 0;
         result = MLSetMaxTaps(params->maxTaps);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetMaxTaps returned :%d\n",result);
+            MPL_LOGE("MLSetMaxTaps returned :%d\n", result);
         }
-        MPL_LOGI("MLSetMaxTaps(%d)\n",params->maxTaps);
+        MPL_LOGI("MLSetMaxTaps(%d)\n", params->maxTaps);
     } break;
     case 's': {
         int shakeParam;
@@ -213,7 +242,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         };
         result = MLSetShakeFunc(shakeParam);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetShakeFunc returned :%d\n",result);
+            MPL_LOGE("MLSetShakeFunc returned :%d\n", result);
         }
     } break;
     case 'x': 
@@ -223,9 +252,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->xShakeThresh -= 100;
         result = MLSetShakeThresh(ML_PITCH_SHAKE, params->xShakeThresh);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetShakeThresh returned :%d\n",result);
+            MPL_LOGE("MLSetShakeThresh returned :%d\n", result);
         }
-        MPL_LOGI("MLSetShakeThresh(ML_PITCH_SHAKE, %d)\n",params->xShakeThresh);
+        MPL_LOGI("MLSetShakeThresh(ML_PITCH_SHAKE, %d)\n", params->xShakeThresh);
     } break;
     case 'y': 
         params->yShakeThresh += 200;
@@ -234,9 +263,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->yShakeThresh -= 100;
         result = MLSetShakeThresh(ML_ROLL_SHAKE, params->yShakeThresh);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetShakeThresh returned :%d\n",result);
+            MPL_LOGE("MLSetShakeThresh returned :%d\n", result);
         }
-        MPL_LOGI("MLSetShakeThresh(ML_ROLL_SHAKE, %d)\n",params->yShakeThresh);
+        MPL_LOGI("MLSetShakeThresh(ML_ROLL_SHAKE, %d)\n", params->yShakeThresh);
     } break;
     case 'z':
         params->zShakeThresh += 200;
@@ -245,7 +274,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->zShakeThresh -= 100;
         result = MLSetShakeThresh(ML_YAW_SHAKE, params->zShakeThresh);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetShakeThresh returned :%d\n",result);
+            MPL_LOGE("MLSetShakeThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetShakeThresh(ML_YAW_SHAKE, %d)\n",params->zShakeThresh);
     } break;
@@ -256,7 +285,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->ySnapThresh -= 10;
         result = MLSetHardShakeThresh(ML_ROLL_SHAKE, params->ySnapThresh);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetHardShakeThresh returned :%d\n",result);
+            MPL_LOGE("MLSetHardShakeThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetHardShakeThresh(ML_ROLL_SHAKE, %d)\n",params->ySnapThresh);
     } break;
@@ -267,7 +296,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->xSnapThresh -= 10;
         result = MLSetHardShakeThresh(ML_PITCH_SHAKE, params->xSnapThresh);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetHardShakeThresh returned :%d\n",result);
+            MPL_LOGE("MLSetHardShakeThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetHardShakeThresh(ML_PITCH_SHAKE, %d)\n",
                  params->xSnapThresh);
@@ -278,7 +307,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->zSnapThresh -= 10;
         result = MLSetHardShakeThresh(ML_YAW_SHAKE, params->zSnapThresh);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetHardShakeThresh returned :%d\n",result);
+            MPL_LOGE("MLSetHardShakeThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetHardShakeThresh(ML_YAW_SHAKE, %d)\n",params->zSnapThresh);
     } break;
@@ -289,7 +318,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->shakeTime -= 10;
         result = MLSetShakeTime(params->shakeTime);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetShakeTime returned :%d\n",result);
+            MPL_LOGE("MLSetShakeTime returned :%d\n", result);
         }
         MPL_LOGI("MLSetShakeTime(%d)\n", params->shakeTime);
     } break;
@@ -299,7 +328,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->nextShakeTime -= 10;
         result = MLSetNextShakeTime(params->nextShakeTime);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetNextShakeTime returned :%d\n",result);
+            MPL_LOGE("MLSetNextShakeTime returned :%d\n", result);
         }
         MPL_LOGI("MLSetNextShakeTime(%d)\n", params->nextShakeTime);
     } break;
@@ -309,7 +338,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->maxShakes -= 1;
         result = MLSetMaxShakes(ML_SHAKE_ALL, params->maxShakes);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetMaxShakes returned :%d\n",result);
+            MPL_LOGE("MLSetMaxShakes returned :%d\n", result);
         }
         MPL_LOGI("MLSetMaxShakes(%d)\n", params->maxShakes);
     } break;
@@ -319,7 +348,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->yawRotateTime -= 10;
         result = MLSetYawRotateTime(params->yawRotateTime);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetYawRotateTime returned :%d\n",result);
+            MPL_LOGE("MLSetYawRotateTime returned :%d\n", result);
         }
         MPL_LOGI("MLSetYawRotateTime(%d)\n", params->yawRotateTime);
     } break;
@@ -329,7 +358,7 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->yawRotateThreshold -= 1;
         result = MLSetYawRotateThresh(params->yawRotateThreshold);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetYawRotateThresh returned :%d\n",result);
+            MPL_LOGE("MLSetYawRotateThresh returned :%d\n", result);
         }
         MPL_LOGI("MLSetYawRotateThresh(%d)\n", params->yawRotateThreshold);
     } break;
@@ -339,9 +368,9 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
         params->shakeRejectValue -= 0.10f;
         result = MLSetTapShakeReject(params->shakeRejectValue);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetTapShakeReject returned :%d\n",result);
+            MPL_LOGE("MLSetTapShakeReject returned :%d\n", result);
         }
-        MPL_LOGI("MLSetTapShakeReject(%f)\n",params->shakeRejectValue);
+        MPL_LOGI("MLSetTapShakeReject(%f)\n", params->shakeRejectValue);
     } break;
     case 'd':
         params->orientationThreshold += 10;
@@ -355,13 +384,39 @@ tMLError GestureMenuProcessChar(tGestureMenuParams * const params, char ch)
             params->orientationThreshold = 0;
         }
         
-        result = MLSetOrientationThreshold(params->orientationThreshold);
+        result = MLSetOrientationThreshold(params->orientationThreshold, 
+                                           5, 80, 
+                                           ML_X_AXIS | ML_Y_AXIS | ML_Z_AXIS);
         if (ML_SUCCESS != result) {
-            MPL_LOGE("MLSetOrientationThreshold returned :%d\n",result);
+            MPL_LOGE("MLSetOrientationThreshold returned :%d\n", result);
         }
-        MPL_LOGI("MLSetOrientationThreshold(%d)\n",
-                 params->orientationThreshold);
+        MPL_LOGI("MLSetOrientationThreshold(%f, %d, %d,"
+                 " ML_X_AXIS | ML_Y_AXIS | ML_Z_AXIS)\n",
+                 params->orientationThreshold, 5, 80);
     } break;
+    case 'f':
+        result = MLSetFIFORate(MLGetFIFORate() + 1);
+        MPL_LOGI("MLSetFIFORate(%d)\n",MLGetFIFORate());
+        break;
+    case 'F':
+    {
+        unsigned short newRate = MLGetFIFORate();
+        if (newRate > 0)
+            newRate--;
+        result = MLSetFIFORate(newRate);
+        MPL_LOGI("MLSetFIFORate(%d)\n",MLGetFIFORate());
+        break;
+    }
+    case 'S':
+        params->sensorsIndex++;
+        if (params->sensorsIndex >= DIM(sensors)) {
+            params->sensorsIndex = 0;
+        }
+        result = MLSetMPUSensors(sensors[params->sensorsIndex]);
+        ERROR_CHECK(result);
+        MPL_LOGI("%d = MLSetMPUSensors(%s)\n", result,
+                 sensors_string[params->sensorsIndex]);
+        break;
     case 'h':
     case 'H': {
         PrintGestureMenu(params);
@@ -399,6 +454,7 @@ void GestureMenuSetDefaults(tGestureMenuParams * const params) {
     params->yawRotateTime           = 80;
     params->yawRotateThreshold      = 70;
     params->orientationThreshold    = 60;
+    params->sensorsIndex            = 0;
 }
 
 /** 
@@ -414,100 +470,109 @@ tMLError GestureMenuSetMpl(tGestureMenuParams const * const params)
 
     result = MLSetTapThreshByAxis(ML_TAP_AXIS_X, params->xTapThreshold);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetTapThreshByAxis returned :%d\n",result);
+        MPL_LOGE("MLSetTapThreshByAxis returned :%d\n", result);
         return result;
     }
     result = MLSetTapThreshByAxis(ML_TAP_AXIS_Y, params->yTapThreshold);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetTapThreshByAxis returned :%d\n",result);
+        MPL_LOGE("MLSetTapThreshByAxis returned :%d\n", result);
         return result;
     }
     result = MLSetTapThreshByAxis(ML_TAP_AXIS_Z, params->zTapThreshold);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetTapThreshByAxis returned :%d\n",result);
+        MPL_LOGE("MLSetTapThreshByAxis returned :%d\n", result);
         return result;
     }
     result = MLSetTapTime(params->tapTime);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetTapTime returned :%d\n",result);
+        MPL_LOGE("MLSetTapTime returned :%d\n", result);
         return result;
     }
     result = MLSetNextTapTime(params->nextTapTime);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetNextTapTime returned :%d\n",result);
+        MPL_LOGE("MLSetNextTapTime returned :%d\n", result);
         return result;
     }
     result = MLSetMaxTaps(params->maxTaps);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetMaxTaps returned :%d\n",result);
+        MPL_LOGE("MLSetMaxTaps returned :%d\n", result);
         return result;
     }
     result = MLSetTapShakeReject(params->shakeRejectValue);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetTapShakeReject returned :%d\n",result);
+        MPL_LOGE("MLSetTapShakeReject returned :%d\n", result);
         return result;
     }
 
     //Set up shake gesture
     result = MLSetShakeFunc(params->shakeFunction);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetShakeFunc returned :%d\n",result);
+        MPL_LOGE("MLSetShakeFunc returned :%d\n", result);
         return result;
     }
     result = MLSetShakeThresh(ML_ROLL_SHAKE, params->xShakeThresh);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetShakeThresh returned :%d\n",result);
+        MPL_LOGE("MLSetShakeThresh returned :%d\n", result);
         return result;
     }
     result = MLSetShakeThresh(ML_PITCH_SHAKE, params->yShakeThresh);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetShakeThresh returned :%d\n",result);
+        MPL_LOGE("MLSetShakeThresh returned :%d\n", result);
         return result;
     }
     result = MLSetShakeThresh(ML_YAW_SHAKE, params->zShakeThresh);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetShakeThresh returned :%d\n",result);
+        MPL_LOGE("MLSetShakeThresh returned :%d\n", result);
         return result;
     }
     result = MLSetShakeTime(params->shakeTime);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetShakeTime returned :%d\n",result);
+        MPL_LOGE("MLSetShakeTime returned :%d\n", result);
         return result;
     }
     result = MLSetNextShakeTime(params->nextShakeTime);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetNextShakeTime returned :%d\n",result);
+        MPL_LOGE("MLSetNextShakeTime returned :%d\n", result);
         return result;
     }
     result = MLSetMaxShakes(ML_SHAKE_ALL,params->maxShakes);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetMaxShakes returned :%d\n",result);
+        MPL_LOGE("MLSetMaxShakes returned :%d\n", result);
         return result;
     }
 
     // Yaw rotate settings
     result = MLSetYawRotateTime(params->yawRotateTime);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetYawRotateTime returned :%d\n",result);
+        MPL_LOGE("MLSetYawRotateTime returned :%d\n", result);
         return result;
     }
     result = MLSetYawRotateThresh(params->yawRotateThreshold);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetYawRotateThresh returned :%d\n",result);
+        MPL_LOGE("MLSetYawRotateThresh returned :%d\n", result);
         return result;
     }
 
     // Orientation settings
-    result = MLSetOrientationThreshold(params->orientationThreshold);
+    result = MLSetOrientationThreshold(params->orientationThreshold, 5, 80,
+                                       ML_X_AXIS | ML_Y_AXIS | ML_Z_AXIS);
     if (ML_SUCCESS != result) {
-        MPL_LOGE("MLSetOrientationThreshold returned: %d\n",result);
+        MPL_LOGE("MLSetOrientationThreshold returned: %d\n", result);
+        return result;
+    }
+
+    // Requested Sensors
+    result = MLSetMPUSensors(sensors[params->sensorsIndex]);
+    if (ML_SUCCESS != result) {
+        MPL_LOGE("MLSetMPUSesnors returned: %d %lx\n", result, 
+                 sensors[params->sensorsIndex]);
         return result;
     }
 
     return ML_SUCCESS;
 }
 
-void PrintGesture(gesture_t* gesture) 
+void PrintGesture(tGesture* gesture) 
 {
     float speed;
     char type[1024];
@@ -521,7 +586,7 @@ void PrintGesture(gesture_t* gesture)
             snprintf(type,sizeof(type),"+");
         }
 
-        switch (abs(gesture->meta))
+        switch (ABS(gesture->meta))
         {
         case 1:
             strcat(type,"X");
@@ -542,9 +607,12 @@ void PrintGesture(gesture_t* gesture)
                  gesture->strength,
                  gesture->speed,
                  gesture->reserved,
-                 (180/M_PI)*atan2((float)gesture->strength,(float)gesture->speed),
-                 (180/M_PI)*atan2((float)gesture->speed,(float)gesture->reserved),
-                 (180/M_PI)*atan2((float)gesture->strength,(float)gesture->reserved)
+                 (180 / M_PI) * atan2(
+                    (float)gesture->strength, (float)gesture->speed),
+                 (180 / M_PI) * atan2(
+                    (float)gesture->speed, (float)gesture->reserved),
+                 (180 / M_PI) * atan2(
+                    (float)gesture->strength, (float)gesture->reserved)
             );
     }
     break;
@@ -553,15 +621,15 @@ void PrintGesture(gesture_t* gesture)
     case ML_YAW_SHAKE:
     {
         if (gesture->strength){
-            snprintf(type,sizeof(type),"Snap : ");
+            snprintf(type, sizeof(type), "Snap : ");
         } else {
-            snprintf(type,sizeof(type),"Shake: ");
+            snprintf(type, sizeof(type), "Shake: ");
         }
 
         if (gesture->meta==0) {
-            strcat(type,"+");
+            strcat(type, "+");
         } else {
-            strcat(type,"-");
+            strcat(type, "-");
         }
 
         if (gesture->type == ML_ROLL_SHAKE) {
@@ -573,13 +641,13 @@ void PrintGesture(gesture_t* gesture)
         }
         
         speed = (float)gesture->speed + 
-            (float)(gesture->reserved/(float)(1 << 16));
+            (float)(gesture->reserved / (float)(1 << 16));
         MPL_LOGI("%s:%3d (speed: %8.2f)\n",type, gesture->num, speed);
     }
     break;
     case ML_YAW_IMAGE_ROTATE:
     {
-        if (gesture->meta==0) {
+        if (gesture->meta == 0) {
             snprintf(type, sizeof(type), "Positive ");
         } else {
             snprintf(type, sizeof(type), "Negative ");
@@ -592,3 +660,53 @@ void PrintGesture(gesture_t* gesture)
         break;
     }
 }
+
+/** 
+ * Prints the new or current orientation using MPL_LOGI and remembers the last
+ * orientation to print orientation flips.
+ * 
+ * @param orientation the new or current orientation.  0 to reset.
+ */
+void PrintOrientation(unsigned short orientation)
+{
+    // Determine if it was a flip
+    static int sLastOrientation = 0;
+    int flip = orientation | sLastOrientation;
+
+    if ((ML_X_UP | ML_X_DOWN) == flip) {
+        MPL_LOGI("Flip about the X Axis: \n");
+    } else if ((ML_Y_UP | ML_Y_DOWN) == flip) {
+        MPL_LOGI("Flip about the Y axis: \n");
+    } else if ((ML_Z_UP | ML_Z_DOWN) == flip) {
+        MPL_LOGI("Flip about the Z axis: \n");
+    }
+    sLastOrientation = orientation;
+
+    switch (orientation) {
+    case ML_X_UP:
+        MPL_LOGI("X Axis is up\n");
+        break;
+    case ML_X_DOWN:
+        MPL_LOGI("X Axis is down\n");
+        break;
+    case ML_Y_UP:
+        MPL_LOGI("Y Axis is up\n");
+        break;
+    case ML_Y_DOWN:
+        MPL_LOGI("Y Axis is down\n");
+        break;
+    case ML_Z_UP:
+        MPL_LOGI("Z Axis is up\n");
+        break;
+    case ML_Z_DOWN:
+        MPL_LOGI("Z Axis is down\n");
+        break;
+    case 0:
+        break; /* Not an error.  Resets sLastOrientation */
+    default:
+        MPL_LOGE("%s: Unreconized orientation %hx\n", __func__, orientation);
+        break;
+    }
+}
+
+

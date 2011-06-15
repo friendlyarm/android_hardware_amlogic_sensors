@@ -3,11 +3,11 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
-/*******************************************************************************
+/******************************************************************************
  *
- * $Id: ml.h 4260 2010-12-08 19:56:45Z prao $
+ * $Id: ml.h 5131 2011-04-02 00:34:38Z jbotelho $
  *
- ******************************************************************************/
+ *****************************************************************************/
 
 /** 
  *  @defgroup ML
@@ -23,7 +23,6 @@
  *      @brief Header file for the Motion Library.
 **/
 
-
 #ifndef ML_H
 #define ML_H
 
@@ -31,6 +30,7 @@
 extern "C" {
 #endif
 
+#include "tempComp.h"
 #include "mltypes.h"
 #include "mldmp.h"
 #include "mlsl.h"
@@ -42,36 +42,39 @@ extern "C" {
 
     /* - Module defines. - */
 
-    /**************************************************************************/
-    /*  Motion Library Vesion                                                 */
-    /**************************************************************************/
+    /*************************************************************************/
+    /*  Motion Library Vesion                                                */
+    /*************************************************************************/
 
 #define ML_VERSION_MAJOR                 3
-#define ML_VERSION_MINOR                 2
-#define ML_VERSION_SUB_MINOR             1
+#define ML_VERSION_MINOR                 4
+#define ML_VERSION_SUB_MINOR             0
 
 #define ML_VERSION_MAJOR_STR            "3"
-#define ML_VERSION_MINOR_STR            "2"
-#define ML_VERSION_SUB_MINOR_STR        "1"
+#define ML_VERSION_MINOR_STR            "4"
+#define ML_VERSION_SUB_MINOR_STR        "0"
 
-#define ML_VERSION_ENGINEERING          "EngA"
-#define ML_VERSION_PRE_ALPHA            "Pre-Alpha"
-#define ML_VERSION_ALPHA                "Alpha"
-#define ML_VERSION_BETA                 "Beta"
-#define ML_VERSION_PRODUCTION           "Prod"
+#define ML_VERSION_NONE                 ""
+#define ML_VERSION_PROTOTYPE            "ProtoA "
+#define ML_VERSION_ENGINEERING          "EngA "
+#define ML_VERSION_PRE_ALPHA            "Pre-Alpha "
+#define ML_VERSION_ALPHA                "Alpha "
+#define ML_VERSION_BETA                 "Beta "
+#define ML_VERSION_PRODUCTION           "Prod "
 
 #ifndef ML_VERSION_TYPE
-#define ML_VERSION_TYPE ML_VERSION_ALPHA
+#define ML_VERSION_TYPE ML_VERSION_NONE
 #endif
 
-#define ML_VERSION  "InvenSense MPL" " " ML_VERSION_TYPE " "\
-    "v" ML_VERSION_MAJOR_STR "." ML_VERSION_MINOR_STR "." ML_VERSION_SUB_MINOR_STR \
-    " " __DATE__ " " __TIME__
+#define ML_VERSION  "InvenSense MPL" " " \
+    "v" ML_VERSION_MAJOR_STR "." ML_VERSION_MINOR_STR "." ML_VERSION_SUB_MINOR_STR " " \
+    ML_VERSION_TYPE \
+    __DATE__ " " __TIME__
 
 
-    /**************************************************************************/
-    /*  Motion processing engines                                             */
-    /**************************************************************************/
+    /*************************************************************************/
+    /*  Motion processing engines                                            */
+    /*************************************************************************/
 		
 #define ML_MOTION_DETECT				(0x0004)
 #define ML_BIAS_UPDATE					(0x0008)
@@ -81,30 +84,27 @@ extern "C" {
 #define ML_PEDOMETER                    (0x0200)
 #define ML_BASIC                        (ML_MOTION_DETECT | ML_BIAS_UPDATE)
 
-    /*******************************************************************************/
-    /*  Data Source                                                                */
-    /*******************************************************************************/
-		
+    /*************************************************************************/
+    /*  Data Source - Obsolete                                               */
+    /*************************************************************************/
+
 #define ML_DATA_FIFO        (0x1)
 #define ML_DATA_POLL        (0x2)
-// Gesture Interrupts use the fifo
-#define ML_DATA_GESTURE_INT (0x4 | ML_DATA_FIFO)
 
-    /*******************************************************************************/
-    /*  Interrupt Source                                                           */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Interrupt Source                                                     */
+    /*************************************************************************/
 #define ML_INT_MOTION           (0x01)
 #define ML_INT_FIFO             (0x02)
-#define ML_INT_GESTURE          (0x04)
-#define ML_INT_TAP              (0x08)
-#define ML_INT_ORIENTATION      (0x10)
-#define ML_INT_SHAKE_PITCH      (0x20)
-#define ML_INT_SHAKE_ROLL       (0x40)
-#define ML_INT_SHAKE_YAW        (0x80)
+#define ML_INT_TAP              (0x04)
+#define ML_INT_ORIENTATION      (0x08)
+#define ML_INT_SHAKE_PITCH      (0x10)
+#define ML_INT_SHAKE_ROLL       (0x20)
+#define ML_INT_SHAKE_YAW        (0x40)
 
-    /*******************************************************************************/
-    /*  Bias update functions                                                      */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Bias update functions                                                */
+    /*************************************************************************/
 
 #define ML_BIAS_FROM_NO_MOTION          0x0001
 #define ML_BIAS_FROM_GRAVITY            0x0002
@@ -114,60 +114,31 @@ extern "C" {
 #define ML_MAG_BIAS_FROM_GYRO           0x0020
 #define ML_LEARN_BIAS_FROM_TEMPERATURE  0x0040
 #define ML_AUTO_RESET_MAG_BIAS          0x0080
+#define ML_REJECT_MAG_DISTURBANCE       0x0100
+#define ML_PROGRESSIVE_NO_MOTION        0x0200
 
-    /*******************************************************************************/
-    /*  Euler angles                                                               */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Euler angles and axis names                                          */
+    /*************************************************************************/
 
-#define ML_PITCH                        0x0001
-#define ML_ROLL                         0x0002
-#define ML_YAW                          0x0004
+#define ML_X_AXIS                       (0x01)
+#define ML_Y_AXIS                       (0x02)
+#define ML_Z_AXIS                       (0x04)
 
-    /*******************************************************************************/
-    /*  Elements                                                                   */
-    /*******************************************************************************/
+#define ML_PITCH                        (ML_X_AXIS)
+#define ML_ROLL                         (ML_Y_AXIS)
+#define ML_YAW                          (ML_Z_AXIS)
 
-#define ML_ELEMENT_1                    0x0001
-#define ML_ELEMENT_2                    0x0002
-#define ML_ELEMENT_3                    0x0004
-#define ML_ELEMENT_4                    0x0008
-#define ML_ELEMENT_5                    0x0010
-#define ML_ELEMENT_6                    0x0020
-#define ML_ELEMENT_7                    0x0040
-#define ML_ELEMENT_8                    0x0080
-
-    /*******************************************************************************/
-    /*  Accuracy                                                                   */
-    /*******************************************************************************/
-
-//#define ML_16_BIT                       0x4000
-//#define ML_32_BIT                       0x8000
-
-    /*******************************************************************************/
-    /*  Sensors                                                                    */
-    /*******************************************************************************/
-
-#define ML_X_GYRO                       0x0001
-#define ML_Y_GYRO                       0x0002
-#define ML_Z_GYRO                       0x0004
-#define ML_X_ACCEL                      0x0008
-#define ML_Y_ACCEL                      0x0010
-#define ML_Z_ACCEL                      0x0020
-#define ML_FIVE_AXIS                    0x003B
-#define ML_SIX_AXIS                     0x003F
-#define ML_TEMPERATURE                  0x0040
-#define ML_TIME                         0x0080
-
-    /*******************************************************************************/
-    /*  Sensor types                                                               */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Sensor types                                                         */
+    /*************************************************************************/
 
 #define ML_GYROS                        0x0001
 #define ML_ACCELS                       0x0002
 
-    /*******************************************************************************/
-    /*  Motion arrays                                                              */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Motion arrays                                                        */
+    /*************************************************************************/
 
 #define ML_ROTATION_MATRIX              0x0003
 #define ML_QUATERNION                   0x0004
@@ -199,13 +170,18 @@ extern "C" {
 
 #define ML_MAGNETOMETER                 0x001A
 #define ML_PEDLBS                       0x001B
-#define ML_MAG_RAW_DATA					0x001C 
-#define ML_MAG_CALIBRATION_MATRIX		0x001D
-#define ML_MAG_BIAS						0x001E
-#define ML_HEADING						0x001F
+#define ML_MAG_RAW_DATA                 0x001C
+#define ML_MAG_CALIBRATION_MATRIX       0x001D
+#define ML_MAG_BIAS                     0x001E
+#define ML_HEADING                      0x001F
 
-#define ML_MAG_BIAS_ERROR				0x0020
+#define ML_MAG_BIAS_ERROR               0x0020
 
+#define ML_PRESSURE                     0x0021
+#define ML_LOCAL_FIELD                  0x0022
+#define ML_MAG_SCALE                    0x0023
+
+#define ML_RELATIVE_QUATERNION          0x0024
 
 
 #define SET_QUATERNION                                  0x0001
@@ -220,30 +196,30 @@ extern "C" {
 #define SET_PACKET_NUMBER                               0x4000
 #define SET_FOOTER                                      0x8000
 
-    /*******************************************************************************/
-    /*  Integral reset options                                                     */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Integral reset options                                               */
+    /*************************************************************************/
 
 #define ML_NO_RESET                     0x0000
 #define ML_RESET                        0x0001
 
-    /*******************************************************************************/
-    /*  Motion states                                                              */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  Motion states                                                        */
+    /*************************************************************************/
 
 #define ML_MOTION                       0x0001
 #define ML_NO_MOTION                    0x0002
 
-    /**************************************************************************/
-    /* Orientation and Gesture states                                         */
-    /**************************************************************************/
+    /*************************************************************************/
+    /* Orientation and Gesture states                                        */
+    /*************************************************************************/
 
 #define ML_STATE_IDLE       (0)
 #define ML_STATE_RUNNING    (1)
 
-    /**************************************************************************/
-    /*  Flags                                                                 */
-    /**************************************************************************/
+    /*************************************************************************/
+    /*  Flags                                                                */
+    /*************************************************************************/
 
 #define ML_RAW_DATA_READY               0x0001
 #define ML_PROCESSED_DATA_READY         0x0002
@@ -252,16 +228,16 @@ extern "C" {
 
 #define ML_MOTION_STATE_CHANGE          0x0006
 
-    /*******************************************************************************/
-    /*  General                                                                    */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  General                                                              */
+    /*************************************************************************/
 
 #define ML_NONE              (0x0000)
 #define ML_INVALID_FIFO_RATE (0xFFFF)
 
-    /*******************************************************************************/
-    /*  ML Params Structure Default Values                                         */
-    /*******************************************************************************/
+    /*************************************************************************/
+    /*  ML Params Structure Default Values                                   */
+    /*************************************************************************/
 
 #define ML_BIAS_UPDATE_FUNC_DEFAULT               ML_BIAS_FROM_NO_MOTION|ML_BIAS_FROM_GRAVITY
 #define ML_ORIENTATION_MASK_DEFAULT               0x3f
@@ -272,18 +248,10 @@ extern "C" {
     /* ------------ */
     /* - Defines. - */
     /* ------------ */
-#define MAX_HIGH_RATE_PROCESSES 5
-#define MAX_INTERRUPT_PROCESSES 3
-/* Number of quantized samples from tap */
-#define ML_MAX_NUM_TAP_SAMPLES (8)
-
-#define BINS 25
-#define PTS_PER_BIN 5
-#define MIN_TEMP -40
-#define MAX_TEMP 85
-#define TEMPMGR_ADD_DATA 0
-#define TEMPMGR_RECOMPUTE 1
-#define TEMPMGR_APPLY    2
+#define MAX_HIGH_RATE_PROCESSES 8
+#define MAX_INTERRUPT_PROCESSES 5
+/* Number of quantized accel samples */
+#define ML_MAX_NUM_ACCEL_SAMPLES (8)
 
 #define PRECISION 10000.f
 #define RANGE_FLOAT_TO_FIXEDPOINT(range, x) {\
@@ -315,10 +283,14 @@ extern "C" {
         long mlGotNoMotionBias;
         long mlGotCompassBias;
         long mlCompassState;
+        long mlLargeField;
         long mlAccState;
 
         long mlFactoryTempComp;
         long mlGotCoarseHeading;
+        long mlGyroTempBias[3];
+        long mlNoMotionBias[3];
+        long mlProgNoMotionBias[3];
 
         long mlGyroBiasTest[3];
         long mlAccelCal[9];
@@ -332,6 +304,9 @@ extern "C" {
         long mlMagSens;
         long mlTempOffset[MPU_NUM_AXES];
 
+        int calLoadedFlag;
+
+        /* temperature compensation */
         float mlXGyroCoeff[3];
         float mlYGyroCoeff[3];
         float mlZGyroCoeff[3];
@@ -339,16 +314,24 @@ extern "C" {
         float mlYGyroTempData[BINS][PTS_PER_BIN];
         float mlZGyroTempData[BINS][PTS_PER_BIN];
         float mlTempData[BINS][PTS_PER_BIN];
-        
-        long mlTempPtrs[BINS];
+        int mlTempPtrs[BINS];
         long mlTempValidData[BINS];
 
         long mlMagCorrection[4];
-        long mlMagCorrectionBackup1[4];
-        long mlMagCorrectionBackup2[4];
+        long mlMagCorrectionRelative[4];
+        long mlMagDisturbCorrection[4];
+        long mlMagCorrectionOffset[4];
+        long mlRelativeQuat[4];
+        long mlLocalField[3];
+        long mlNewLocalField;
+        long mlGravBodySync[3];
+        int mlGyroBiasErr;
 
         double mlMagBiasP[9];
         double mlMagBiasV[3];
+        double mlMagPrevM[36];
+        double mlMagPrevXTY[6];
+
         int mlMagPeaks[18];
         int mlAllSensorsNoMotion;
 
@@ -361,11 +344,13 @@ extern "C" {
         long mlMagSensorData[3];
         long mlMagCalibratedData[3];
         long mlMagTestCalibratedData[3];
+        long mlPressure;
+
         unsigned short mlFlags[7];
         unsigned short suspend;
 
         long mlNoMotionThreshold;
-        long mlMotionDuration;
+        unsigned long mlMotionDuration;
 
         unsigned short mlMotionState;
 
@@ -378,6 +363,13 @@ extern "C" {
         unsigned char internalMotionState;
         long startTime;
         unsigned char saveData[17];
+
+        long accelLPFgain;
+        long accelLPF[3];
+        unsigned long polltimeNoMotion;
+        long mlNoMotionAccelThreshold;
+        unsigned long mlNoMotionAccelTime;
+        tMLError (*modeChange)(unsigned long, unsigned long);
     } tMLXData;
 
     typedef tMLError (*tMlxdataFunction)(tMLXData *);
@@ -419,6 +411,7 @@ extern "C" {
 
     tMLError MLSerialOpen(char const * port);
     tMLError MLSerialClose(void);
+    tMLError MLSetMPUSensors(unsigned long sensors);
     void *MLSerialGetHandle(void);
 
     /*API for handling the buffer*/
@@ -432,6 +425,10 @@ extern "C" {
 
     /*API for setting bias update function*/
     tMLError MLSetBiasUpdateFunc(unsigned short biasFunction);
+#ifdef M_HW
+    tMLError MLTurnOnBiasFromNoMotion();
+    tMLError MLTurnOffBiasFromNoMotion();
+#endif
 
     /*Functions for handling augmented data*/
     tMLError MLGetArray         (int dataSet, long *data);
@@ -439,11 +436,11 @@ extern "C" {
     tMLError MLSetArray         (int dataSet, long* data);
     tMLError MLSetFloatArray    (int dataSet, float *data);
 
-    tMLError MLApplyAccelEndian         ( void );
-    tMLError MLApplyCalibration         ( void );
-    tMLError MLSetGyroCalibration       ( float range, signed char *orientation );
-    tMLError MLSetAccelCalibration      ( float range, signed char *orientation );
-    tMLError MLSetMagCalibration        ( float range, signed char *orientation );
+    tMLError MLApplyAccelEndian         (void);
+    tMLError MLApplyCalibration         (void);
+    tMLError MLSetGyroCalibration       (float range, signed char *orientation);
+    tMLError MLSetAccelCalibration      (float range, signed char *orientation);
+    tMLError MLSetMagCalibration        (float range, signed char *orientation);
 
     /*API for detecting change of state*/
     tMLError MLSetMotionCallback(void (*func)(unsigned short motionState) );
@@ -451,10 +448,6 @@ extern "C" {
 
     /*API for getting ML version. */
     tMLError MLVersion(unsigned char **version);
-
-    /*API for configuring ML interrupt and data mode*/
-    tMLError MLSetDataMode(unsigned short dataMode);
-    int MLGetDataMode(void);
 
     tMLError MLSetMotionInterrupt(unsigned char on);
     tMLError MLSetFifoInterrupt(unsigned char on);
@@ -464,27 +457,18 @@ extern "C" {
     unsigned short MLGetFIFORate(void);
 
     // new
-    tMLError MLEnableMotionDetect ( void );
-    tMLError MLDisableMotionDetect ( void );
-
-    // Math
-    void MLQMultf(float *q1, float *q2, float *qProd);
-    void MLQInvertf(float *q, float *qInverted);
-    void MLQMult(long *q1, long *q2, long *qProd);
-    void MLQInvert(long *q, long *qInverted);
-
-    tMLError MLLoadCal(unsigned char *calData);
-    tMLError MLStoreCal(unsigned char *calData, int length);
-    tMLError MLGetCalLength(unsigned int *length);
-
-    //Simulated DMP
+    tMLError MLEnableMotionDetect(void);
+    tMLError MLDisableMotionDetect(void);
+    
+    /* Simulated DMP */
     int MLGetGyroPresent(void);
 
     tMLError MLSetNoMotionTime(float time);
     tMLError MLSetNoMotionThresh(float thresh);
+    tMLError MLSetNoMotionThreshAccel(long thresh);
     tMLError MLResetMotion();
 
-    tMLError MLPollMotionStatus(void);
+    tMLError MLPollMotionStatus(int newData);
     tMLError MLUpdateBias(void);
     tMLError MLSetDeadZone();
     void MLBiasStart(void);
@@ -493,9 +477,10 @@ extern "C" {
     // Private functions shared accross modules
     void MLXInit(void);
     
-    tMLError RegisterProcessDmpInterrupt( tMlxdataFunction func );
-    tMLError UnRegisterProcessDmpInterrupt( tMlxdataFunction func );
+    tMLError RegisterProcessDmpInterrupt(tMlxdataFunction func);
+    tMLError UnRegisterProcessDmpInterrupt(tMlxdataFunction func);
     void RunProcessDmpInterruptFuncs(void);
+    void MLSetModeChangeCB( tMLError (*modeChange)(unsigned long, unsigned long) );
 
 #ifdef __cplusplus
 }

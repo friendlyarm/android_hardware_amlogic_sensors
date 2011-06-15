@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: pedometer.h 3863 2010-10-08 22:05:31Z nroyer $
+ * $Id: pedometer.h 4682 2011-02-04 22:28:52Z kkeal $
  *
  *******************************************************************************/
 
@@ -41,7 +41,6 @@ extern "C" {
     /* Internal functions */
     void startPedometerLog();
     void endPedometerLog();
-    long sqrti( long x );
 
 #ifdef __cplusplus
 }

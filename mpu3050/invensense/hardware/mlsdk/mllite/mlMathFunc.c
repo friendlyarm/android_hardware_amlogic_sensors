@@ -3,9 +3,53 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
+#include "mlmath.h"
 #include "mlMathFunc.h"
 #include "mlinclude.h"
-#include "mlmath.h"
+
+/** 
+ * Performs one iteration of the filter, generating a new y(0) 
+ *         1     / N                /  N             \\
+ * y(0) = ---- * |SUM b(k) * x(k) - | SUM a(k) * y(k)|| for N = length
+ *        a(0)   \k=0               \ k=1            //
+ * 
+ * The filters A and B should be (sizeof(long) * state->length).
+ * The state variables x and y should be (sizeof(long) * (state->length - 1))
+ *
+ * The state variables x and y should be initialized prior to the first call
+ * 
+ * @param state Contains the length of the filter, filter coefficients and
+ *              filter state variables x and y.
+ * @param x New input into the filter.
+ */
+void FilterLong(struct filter_long *state, 
+                long x)
+{
+    const long * b = state->b;
+    const long * a = state->a;
+    long length    = state->length;
+    long long tmp;
+    int ii;
+
+    /* filter */
+    tmp = (long long) x * (b[0]);
+    for (ii = 0; ii < length-1; ii++) {
+        tmp += ((long long)state->x[ii] * (long long)(b[ii+1]));
+    }
+    for (ii = 0; ii < length-1; ii++) {
+        tmp -= ((long long)state->y[ii] * (long long)(a[ii+1]));
+    }
+    tmp /= (long long)a[0];
+
+    /* Delay */
+    for (ii = length-2; ii > 0; ii--) {
+        state->y[ii] = state->y[ii-1];
+        state->x[ii] = state->x[ii-1];
+    }
+    /* New values */
+    state->y[0] = (long)tmp;
+    state->x[0] = x;
+}
 
 /** Performs a multiply and shift by 29. These are good functions to write in assembly on
  * with devices with small memory where you want to get rid of the long long which some
@@ -38,7 +82,7 @@ long q30_mult( long a, long b )
     result = (long)(temp >> 30);
     return result;
 }
-void MLQMult(long *q1, long *q2, long *qProd)
+void MLQMult(const long *q1, const long *q2, long *qProd)
 {   
     INVENSENSE_FUNC_START;
     qProd[0] = (long)(((long long)q1[0]*q2[0] - (long long)q1[1]*q2[1] -
@@ -80,7 +124,7 @@ void MLQNormalize(long *q)
         q[3] = 0; 
     }   
 }
-void MLQInvert(long *q, long *qInverted)
+void MLQInvert(const long *q, long *qInverted)
 {   
     INVENSENSE_FUNC_START;
     qInverted[0] = q[0];    
@@ -90,7 +134,7 @@ void MLQInvert(long *q, long *qInverted)
 }
 
 
-void MLQMultf(float *q1, float *q2, float *qProd)
+void MLQMultf(const float *q1, const float *q2, float *qProd)
 {   
     INVENSENSE_FUNC_START;
     qProd[0] = (q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2] - q1[3]*q2[3]);     
@@ -132,7 +176,28 @@ void MLQNormalizef(float *q)
     }   
     normSF = (q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
 }
-void MLQInvertf(float *q, float *qInverted) 
+
+/** Performs a length 4 vector normalization with a square root.
+* @param[in,out] vector to normalize. Returns [1,0,0,0] is magnitude is zero.
+*/
+void MLNorm4(float *q)
+{
+    float mag;
+    mag = sqrtf(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
+    if (mag) {
+        q[0] /= mag;
+        q[1] /= mag;
+        q[2] /= mag;
+        q[3] /= mag;
+    } else {
+        q[0] = 1.f;
+        q[1] = 0.f;
+        q[2] = 0.f;
+        q[3] = 0.f;
+    }
+}
+
+void MLQInvertf(const float *q, float *qInverted) 
 {   
     INVENSENSE_FUNC_START;
     qInverted[0] = q[0];    
@@ -163,18 +228,42 @@ void quaternionToRotationMatrix( const long *quat, long *rot )
     rot[8] = q29_mult(quat[3],quat[3])+ q29_mult(quat[0],quat[0]) - 1073741824L;
 }
 
-/** Converts a 32-bit long to a big endian byte stream
-*/
+/** Converts a 32-bit long to a big endian byte stream */
 unsigned char *Long32ToBig8(long x, unsigned char *big8)
 {
-    big8[0] = (unsigned char)((x>>24)&0xff);
-    big8[1] = (unsigned char)((x>>16)&0xff);
-    big8[2] = (unsigned char)((x>>8)&0xff);
-    big8[3] = (unsigned char)(x&0xff);
+    big8[0] = (unsigned char)((x >> 24) & 0xff);
+    big8[1] = (unsigned char)((x >> 16) & 0xff);
+    big8[2] = (unsigned char)((x >>  8) & 0xff);
+    big8[3] = (unsigned char) (x        & 0xff);
+    return big8;
+}
+
+/** Converts a 16-bit short to a big endian byte stream */
+unsigned char *Short16ToBig8(short x, unsigned char *big8)
+{
+    big8[0] = (unsigned char)((x >> 8) & 0xff);
+    big8[1] = (unsigned char) (x       & 0xff);
     return big8;
 }
 
 void matDetInc(float *a,float *b,int *n,int x,int y)
+{
+    int k,l,i,j;
+    for(i=0,k=0;i<*n;i++,k++)
+    {
+        for(j=0,l=0;j<*n;j++,l++)
+        {
+            if(i==x)
+                i++;
+            if(j==y)
+                j++;
+            *(b+10*k+l)=*(a+10*i+j);
+        }
+    }
+    *n=*n-1;
+}
+
+void matDetIncd(double *a,double *b,int *n,int x,int y)
 {
     int k,l,i,j;
     for(i=0,k=0;i<*n;i++,k++)
@@ -202,9 +291,60 @@ float matDet(float *p,int *n)
     {
         *n=m;
         matDetInc(p,&d[0][0],n,i,j);
-        sum=sum+*(p+10*i+j)*(float)pow(-1,(i+j))*matDet(&d[0][0],n);
+        sum=sum+*(p+10*i+j)*SIGNM(i+j)*matDet(&d[0][0],n);
     }
 
     return(sum);
 }
+
+double matDetd(double *p,int *n)
+{
+    double d[10][10], sum=0;
+    int i,j,m;
+    m=*n;
+    if(*n==2)
+        return(*p**(p+11)-*(p+1)**(p+10));
+    for(i=0,j=0;j<m;j++)
+    {
+        *n=m;
+        matDetIncd(p,&d[0][0],n,i,j);
+        sum=sum+*(p+10*i+j)*SIGNM(i+j)*matDetd(&d[0][0],n);
+    }
+
+    return(sum);
+}
+
+/** Wraps angle from (-M_PI,M_PI]
+ * @param[in] ang Angle in radians to wrap
+ * @return Wrapped angle from (-M_PI,M_PI]
+ */
+float MLWrap(float ang)
+{
+    if (ang > M_PI)
+        return ang-2*(float)M_PI;
+    else if (ang <= -(float)M_PI)
+        return ang+2*(float)M_PI;
+    else
+        return ang;
+}
+
+/** Finds the minimum angle difference ang1-ang2 such that difference
+ * is between [-M_PI,M_PI]
+ * @param[in] ang1 
+ * @param[in] ang2
+ * @return angle difference ang1-ang2
+ */
+float MLAngDiff(float ang1, float ang2)
+{
+    float d;
+    ang1 = MLWrap(ang1);
+    ang2 = MLWrap(ang2);
+    d = ang1-ang2;
+    if ( d > M_PI )
+        d -= 2*(float)M_PI;
+    else if ( d < -(float)M_PI )
+        d += 2*(float)M_PI;
+    return d;
+}
+
 

@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: mldl.h 4108 2010-11-20 01:34:54Z nroyer $
+ * $Id: mldl.h 5018 2011-03-17 02:00:49Z nroyer $
  *
  *******************************************************************************/
 
@@ -15,6 +15,8 @@
 #include "mltypes.h"
 #include "mlsl.h"
 #include "mpu.h"
+#include "mldl_cfg.h"
+
     /* ------------ */
     /* - Defines. - */
     /* ------------ */
@@ -77,6 +79,7 @@ typedef enum {
     INTSRC_MPU = 0,
     INTSRC_AUX1,
     INTSRC_AUX2,
+    INTSRC_AUX3,
     INTSRC_TIMER,
     INTSRC_UNKNOWN,
     INTSRC_MPU_FIFO,
@@ -102,8 +105,8 @@ extern "C" {
     tMLError MLDLOpen(void *mlslHandle);
     tMLError MLDLClose(void);
 
-    tMLError MLDLDmpStart(void);
-    tMLError MLDLDmpStop(void);
+    tMLError MLDLDmpStart(unsigned long sensors);
+    tMLError MLDLDmpStop(unsigned long sensors);
 
     struct mldl_cfg* MLDLGetCfg(void);
 
@@ -113,11 +116,12 @@ extern "C" {
     tMLError MLDLCfgInt(unsigned char triggers);
     tMLError MLDLCfgSamplingMPU(unsigned char lpf, 
                                 unsigned char divider);
-    tMLError MLDLSetFullScaleMPU( float fullScale );
+    tMLError MLDLSetFullScaleMPU(float fullScale);
     tMLError MLDLSetExternalSyncMPU(unsigned char extSync);
-    tMLError MLDLSetGyroPower(unsigned char xOn, 
-                              unsigned char yOn, 
-                              unsigned char zOn);
+    tMLError MLDLSetIgnoreSystemSuspend(unsigned char ignore);
+    tMLError MLDLSetGyroPower(unsigned long xOn, 
+                              unsigned long yOn, 
+                              unsigned long zOn);
     tMLError MLDLClockSource(unsigned char clkSource);
     tMLError MLDLGetMemoryMPU(unsigned short key, 
                               unsigned short length, 
@@ -130,8 +134,8 @@ extern "C" {
                           unsigned short startAddress );
 
     unsigned char MLDLGetSiliconRev(void);
-    tMLError MLDLSetLevelShifterBit(unsigned char enable);
     tMLError MLDLSetOffsetTC(unsigned char const *tc);
+    tMLError MLDLSetOffset(unsigned short const *offset);
 
     /* Functions for setting and retrieving the DMP memory */
     tMLError  MLDLGetMemoryMPUOriginal(unsigned short key, 

@@ -6,9 +6,9 @@
 
 /******************************************************************************
  *
- * $Id: mldmp.c 4250 2010-12-08 01:29:04Z prao $
+ * $Id: mldmp.c 4942 2011-03-05 00:51:39Z mcaramello $
  *
- ******************************************************************************/
+ *****************************************************************************/
 
 /**
  * @addtogroup MLDMP
@@ -66,19 +66,28 @@ tMLError MLDmpOpen(void)
 {
     INVENSENSE_FUNC_START;
     tMLError result;
+    unsigned char state = MLGetState();
 
     /*************************************************************
      * Common operations before calling DMPOpen
      ************************************************************/
-    if (MLStateTransition(ML_STATE_DMP_OPENED)) {
-        MPL_LOGE("Error : Serial COM port closed\n");
-        return ML_ERROR_SERIAL_CLOSED;
+    if (state == ML_STATE_DMP_OPENED)
+        return ML_SUCCESS;
+
+    if (state == ML_STATE_DMP_STARTED) {
+        return MLDmpStop();
     }
 
+    result = MLStateTransition(ML_STATE_DMP_OPENED);
+    ERROR_CHECK(result);
+
+    result = MLDLOpen(MLSerialGetHandle());
+    ERROR_CHECK(result);
 #ifdef ML_USE_DMP_SIM
     do {
         void setup_univ();
-        setup_univ();  /* hijack the read and write paths and re-direct them to the simulator */
+        setup_univ();  /* hijack the read and write paths 
+                          and re-direct them to the simulator */
     } while(0);
 #endif
 
@@ -117,13 +126,17 @@ tMLError MLDmpStart(void)
     INVENSENSE_FUNC_START;
     tMLError result;
 
+    if (MLGetState() == ML_STATE_DMP_STARTED)
+        return ML_SUCCESS;
+
     result = MLStateTransition(ML_STATE_DMP_STARTED);
     ERROR_CHECK(result);
-    FIFOHWInit();
-    result = MLResetMotion();
-    ERROR_CHECK(result);
     MLSensorFusionSupervisorInit();
-    result = MLDLDmpStart();
+    result = MLDLDmpStart(MLDLGetCfg()->requested_sensors);
+    ERROR_CHECK(result);
+    /* This is done after the start since it will modify DMP memory, which 
+     * will cause a full reset is most cases */
+    result = MLResetMotion();
     ERROR_CHECK(result);
 
     return result;
@@ -141,9 +154,12 @@ tMLError MLDmpStop(void)
     INVENSENSE_FUNC_START;
     tMLError result;
 
+    if (MLGetState() == ML_STATE_DMP_OPENED)
+        return ML_SUCCESS;
+
     result = MLStateTransition(ML_STATE_DMP_OPENED);
     ERROR_CHECK(result);
-    result = MLDLDmpStop();
+    result = MLDLDmpStop(ML_ALL_SENSORS);
     ERROR_CHECK(result);
 
     return result;
@@ -156,7 +172,7 @@ tMLError MLDmpStop(void)
  *          After calling MLDmpClose() another DMP module can be
  *          loaded in the MPL with the corresponding necessary 
  *          intialization and configurations, via any of the 
- *          MLDmpOpenXXX functions.
+ *          MLDmpXXXOpen functions.
  *
  *  @pre    MLDmpOpen() must have been called.
  * 
@@ -175,10 +191,16 @@ tMLError MLDmpClose(void)
     tMLError result;
     tMLError firstError = ML_SUCCESS;
 
-    result = MLDLDmpStop();
+    if (MLGetState() <= ML_STATE_DMP_CLOSED)
+        return ML_SUCCESS;
+
+    result = MLDLDmpStop(ML_ALL_SENSORS);
     ERROR_CHECK_FIRST(firstError, result);
- 
+
     result = FIFOClose();
+    ERROR_CHECK_FIRST(firstError, result);
+
+    result = MLDLClose();
     ERROR_CHECK_FIRST(firstError, result);
 
     result = MLStateTransition(ML_STATE_SERIAL_OPENED);
@@ -189,6 +211,6 @@ tMLError MLDmpClose(void)
 
 /**
  *  @}
-**/
+ */
 
 

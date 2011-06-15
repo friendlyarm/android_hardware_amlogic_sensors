@@ -27,10 +27,13 @@ extern "C" {
     tMLError MLDisableOrientation(void);
     tMLError MLSetOrientations(int orientation);
     tMLError MLSetOrientationCallback(void (*callback)(unsigned short));
-    //int MLGetOrientation(void);
+    tMLError MLGetOrientation(int *orientation);
     tMLError MLGetOrientationState(int * state);
     tMLError MLSetOrientationInterrupt(unsigned char on);
-    tMLError MLSetOrientationThreshold(float angle);
+    tMLError MLSetOrientationThreshold(float angle,
+                                       float hysteresis,
+                                       unsigned long time, 
+                                       unsigned int axis);
 
 #ifdef __cplusplus
 }

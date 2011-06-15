@@ -5,13 +5,13 @@
  */
 /*******************************************************************************
  *
- * $Id: mlcontrol.c 4244 2010-12-07 19:15:09Z prao $
+ * $Id: mlcontrol.c 4324 2010-12-15 20:07:49Z kkeal $
  *
- * $Date: 2010-12-07 11:15:09 -0800 (Tue, 07 Dec 2010) $
+ * $Date: 2010-12-15 12:07:49 -0800 (Wed, 15 Dec 2010) $
  *
- * $Author: prao $
+ * $Author: kkeal $
  *
- * $Revision: 4244 $
+ * $Revision: 4324 $
  *
  *******************************************************************************/
 
@@ -45,6 +45,7 @@
 #include "dmpKey.h"
 #include "mlstates.h"
 #include "mlFIFO.h"
+#include "string.h"
 
 /* - Global Vars. - */
 tMLCTRLParams mlCtrlParams = { 
@@ -55,7 +56,6 @@ tMLCTRLParams mlCtrlParams = {
         MLCTRL_SENSITIVITY_3_DEFAULT
     },                                              // sensitivity
     MLCTRL_FUNCTIONS_DEFAULT,                       // functions
-    MLCTRL_CONTROL_SIGNALS_DEFAULT,                 // controlSignals
     {
         MLCTRL_PARAMETER_ARRAY_0_DEFAULT,
         MLCTRL_PARAMETER_ARRAY_1_DEFAULT,
@@ -110,7 +110,7 @@ extern const unsigned char *dmpConfig1;
  *
  *  @return error code
  */
-tMLError MLSetControlSensitivity(unsigned short controlSignal, int sensitivity)
+tMLError MLSetControlSensitivity(unsigned short controlSignal, long sensitivity)
 {
     INVENSENSE_FUNC_START;
     unsigned char regs[2];
@@ -231,7 +231,7 @@ tMLError MLSetControlFunc(unsigned short function)
  *
  *  @return Zero if the command is successful; an ML error code otherwise.
  */
-tMLError MLGetControlSignal(unsigned short controlSignal, unsigned short reset, int *data)
+tMLError MLGetControlSignal(unsigned short controlSignal, unsigned short reset, long *data)
 {
     INVENSENSE_FUNC_START;
 
@@ -291,7 +291,7 @@ tMLError MLGetControlSignal(unsigned short controlSignal, unsigned short reset, 
  *  @return Zero if the command is successful; an ML error code otherwise.
  */
 
-tMLError MLGetGridNum(unsigned short controlSignal, unsigned short reset,int *data)
+tMLError MLGetGridNum(unsigned short controlSignal, unsigned short reset,long *data)
 {
     INVENSENSE_FUNC_START;
     
@@ -345,7 +345,7 @@ tMLError MLGetGridNum(unsigned short controlSignal, unsigned short reset,int *da
  *  @return Zero if the command is successful; an ML error code otherwise.
  */
 
-tMLError MLSetGridThresh(unsigned short controlSignal, int threshold)
+tMLError MLSetGridThresh(unsigned short controlSignal, long threshold)
 {
     INVENSENSE_FUNC_START;
     
@@ -395,7 +395,7 @@ tMLError MLSetGridThresh(unsigned short controlSignal, int threshold)
  *  @return Zero if the command is successful; an ML error code otherwise.
  */
 
-tMLError MLSetGridMax(unsigned short controlSignal, int maximum)
+tMLError MLSetGridMax(unsigned short controlSignal, long maximum)
 {
     INVENSENSE_FUNC_START;
 
@@ -440,7 +440,7 @@ tMLError MLSetGridMax(unsigned short controlSignal, int maximum)
  *  @param  gridChange  An array of four numbers representing the change in grid number
  *                      for each control signal.
 **/
-typedef void (*fpGridCb)(unsigned short controlSignal, int *gridNum, int *gridChange);
+typedef void (*fpGridCb)(unsigned short controlSignal, long *gridNum, long *gridChange);
 
 /**
  *  @brief  MLSetGridCallback is used to register a callback function that
@@ -465,36 +465,6 @@ tMLError MLSetGridCallback(fpGridCb func)
     mlCtrlParams.gridCallback = func;
     return ML_SUCCESS;
 }
-
-
-/**
- *  @brief  MLSetControlSignals is used to register which control signals will be
- *          processed. MLRegisterControlSignals is used to register which control
- *          signals will be processed. Options are:
- *          - ML_CONTROL_1,
- *          - ML_CONTROL_2,
- *          - ML_CONTROL_3 and
- *          - ML_CONTROL_4.
- *
- *  @pre    MLDmpOpen() Must be called with MLDmpDefaultOpen() or 
- *          MLDmpPedometerStandAloneOpen().
- *
- *  @param  controlSignals  A control signal or bitwise OR of multiple control signals.
- *
- *  @return Zero if the command is successful; an ML error code otherwise.
- */
-
-tMLError MLSetControlSignals(unsigned short controlSignals)
-{
-    INVENSENSE_FUNC_START;
-
-    if ( MLGetState() != ML_STATE_DMP_OPENED )
-        return ML_ERROR_SM_IMPROPER_STATE;   
-
-    mlCtrlParams.controlSignals = controlSignals;
-    return ML_SUCCESS;
-}
-
 
 /**
  *  @brief  MLSetControlData is used to assign physical parameters to control signals.
@@ -557,6 +527,8 @@ tMLError MLSetControlData(unsigned short controlSignal, unsigned short parameter
                     regs[1] = DINA42;
                     mlCtrlParams.parameterAxis[0] = 2;
                     break;
+                default:
+                    return ML_ERROR_INVALID_PARAMETER;
             }
             result = MLDLSetMemoryMPU(KEY_CFG_3, 2, regs );
             ERROR_CHECK(result);
@@ -576,6 +548,8 @@ tMLError MLSetControlData(unsigned short controlSignal, unsigned short parameter
                     regs[1] += DINA4E;
                     mlCtrlParams.parameterAxis[1] = 2;
                     break;
+                default:
+                    return ML_ERROR_INVALID_PARAMETER;
             }
             result = MLDLSetMemoryMPU(KEY_CFG_3B, 2, regs );
             ERROR_CHECK(result);
@@ -595,6 +569,8 @@ tMLError MLSetControlData(unsigned short controlSignal, unsigned short parameter
                     regs[1] += DINA4E;
                     mlCtrlParams.parameterAxis[2] = 2;
                     break;
+                default:
+                    return ML_ERROR_INVALID_PARAMETER;
             }
             result = MLDLSetMemoryMPU(KEY_CFG_3C, 2, regs );
             ERROR_CHECK(result);
@@ -614,6 +590,8 @@ tMLError MLSetControlData(unsigned short controlSignal, unsigned short parameter
                     regs[1] += DINA4E;
                     mlCtrlParams.parameterAxis[3] = 2;
                     break;
+                default:
+                    return ML_ERROR_INVALID_PARAMETER;
             }
             result = MLDLSetMemoryMPU(KEY_CFG_3D, 2, regs );
             ERROR_CHECK(result);
@@ -645,7 +623,7 @@ tMLError MLSetControlData(unsigned short controlSignal, unsigned short parameter
  *  @return Zero if the command is successful; an ML error code otherwise.
  */
 
-tMLError MLGetControlData(int *controlSignal, int *gridNum, int *gridChange)
+tMLError MLGetControlData(long *controlSignal, long *gridNum, long *gridChange)
 {
     INVENSENSE_FUNC_START;
     int_fast8_t i=0;
@@ -747,6 +725,8 @@ tMLError MLEnableControl(void)
     
     if ( MLGetState() != ML_STATE_DMP_OPENED )
         return ML_ERROR_SM_IMPROPER_STATE;
+
+    memset( &mlCtrlxData, 0, sizeof(mlCtrlxData) );
 
     RegisterHighRateProcess( MLControlUpdate ); // fixme, someone needs to send control data to the fifo
     mlxData.mlEngineMask |= ML_CONTROL;

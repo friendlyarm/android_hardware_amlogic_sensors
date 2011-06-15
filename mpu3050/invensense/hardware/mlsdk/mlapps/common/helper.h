@@ -3,6 +3,13 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
+
+/*******************************************************************************
+ *
+ * $Id: helper-customer.h 5146 2011-04-05 18:23:24Z mcaramello $
+ *
+ *******************************************************************************/
+
 #ifndef HELPER_C_H
 #define HELPER_C_H
 
@@ -10,45 +17,82 @@
 extern "C" {
 #endif
 
-#include "mpu.h"
+#include "mltypes.h"
 #include "mlerrorcode.h"
 
-#define CALL_N_CHECK(f) {\
-    unsigned int result = f;\
-    if(ML_SUCCESS != result) {\
-        printf("Error : %s returned code #%d\n", #f, result);\
-    } \
+/*
+    Defines 
+*/
+
+#define CALL_N_CHECK(f) {                                                   \
+    unsigned int r35uLt = f;                                                \
+    if(ML_SUCCESS != r35uLt) {                                              \
+        printf("Error in file %s, line %d : %s returned code %s (#%d)\n",   \
+                __FILE__, __LINE__, #f, MLErrorCode(r35uLt), r35uLt);       \
+    }                                                                       \
 }
 
-#define CALL_CHECK_N_RETURN(f) {\
-    unsigned int result = f;\
-    if(ML_SUCCESS != result) {\
-        printf("Error : %s returned code #%d\n", #f, result);\
-        return result; \
-    } \
+#define CALL_CHECK_N_RETURN_ERROR(f) {                                      \
+    unsigned int r35uLt = f;                                                \
+    if(ML_SUCCESS != r35uLt) {                                              \
+        printf("Error in file %s, line %d : %s returned code %s (#%d)\n",   \
+                __FILE__, __LINE__, #f, MLErrorCode(r35uLt), r35uLt);       \
+        return r35uLt;                                                      \
+    }                                                                       \
 }
 
-#define CALL_CHECK_N_EXIT(f, exitfunc) {\
-    unsigned int result = f;\
-    if(ML_SUCCESS != result) {\
-        printf("Error : %s returned code #%d\n", #f, result);\
-        exitfunc; \
-    } \
+// for functions returning void
+#define CALL_CHECK_N_RETURN(f) {                                            \
+    unsigned int r35uLt = f;                                                \
+    if(ML_SUCCESS != r35uLt) {                                              \
+        printf("Error in file %s, line %d : %s returned code %s (#%d)\n",   \
+                __FILE__, __LINE__, #f, MLErrorCode(r35uLt), r35uLt);       \
+        return;                                                             \
+    }                                                                       \
 }
 
-#define CALL_CHECK_N_GOTO(f, label) {\
-    unsigned int result = f;\
-    if(ML_SUCCESS != result) {\
-        printf("Error : %s returned code #%d\n", #f, result);\
-        goto label; \
-    } \
+#define CALL_CHECK_N_EXIT(f) {                                              \
+    unsigned int r35uLt = f;                                                \
+    if(ML_SUCCESS != r35uLt) {                                              \
+        printf("Error in file %s, line %d : %s returned code %s (#%d)\n",   \
+                __FILE__, __LINE__, #f, MLErrorCode(r35uLt), r35uLt);       \
+        exit (r35uLt);                                                      \
+    }                                                                       \
 }
 
+    
+#define CALL_CHECK_N_CALLBACK(f, cb) {                                      \
+    unsigned int r35uLt = f;                                                \
+    if(ML_SUCCESS != r35uLt) {                                              \
+        printf("Error in file %s, line %d : %s returned code %s (#%d)\n",   \
+                __FILE__, __LINE__, #f, MLErrorCode(r35uLt), r35uLt);       \
+        cb;                                                                 \
+    }                                                                       \
+}
+
+#define CALL_CHECK_N_GOTO(f, label) {                                       \
+    unsigned int r35uLt = f;                                                \
+    if(ML_SUCCESS != r35uLt) {                                              \
+        printf("Error in file %s, line %d : %s returned code %s (#%d)\n",   \
+                __FILE__, __LINE__, #f, MLErrorCode(r35uLt), r35uLt);       \
+        goto label;                                                         \
+    }                                                                       \
+}
+
+#define DEFAULT_ACCEL_ID        ACCEL_ID_KXTF9
+#define DEFAULT_COMPASS_ID      COMPASS_ID_AKM
+
+#define DataLogger(x)           NULL
 #define DataLoggerSelector(x)   //
 #define DataLoggerCb(x)         NULL
-int             findComm            ( char * port, int size );
-tMLError        findHw              ( void *mlsl_handle, unsigned short* accelId, unsigned short* compassId );
-tMLError        MenuHwChoice        ( unsigned short* accelId, unsigned short* compassId );
+#define findComm()              (9)
+#define MenuHwChoice(x,y)       (*x = DEFAULT_ACCEL_ID, *y = DEFAULT_COMPASS_ID, 1)
+
+    char ConsoleGetChar(void);
+    int ConsoleKbhit(void);
+    struct mpuirq_data **InterruptPoll(
+        int *handles, int numHandles, long tv_sec, long tv_usec);
+    void InterruptPollDone(struct mpuirq_data ** data);
 
 #ifdef __cplusplus
 }

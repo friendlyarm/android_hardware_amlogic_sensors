@@ -4,7 +4,7 @@
  $
  */
 /***************************************************************************** *
- * $Id: gestureMenu.h 4074 2010-11-16 01:17:47Z nroyer $ 
+ * $Id: gestureMenu.h 4574 2011-01-22 01:39:28Z nroyer $ 
  ******************************************************************************/
 /**
  * @defgroup 
@@ -53,11 +53,13 @@ extern "C" {
 
         /* Orientation */
         float orientationThreshold;
+        int sensorsIndex;
     } tGestureMenuParams;
 
     void     PrintGestureMenu(tGestureMenuParams const * const params) ;
     tMLError GestureMenuProcessChar(tGestureMenuParams * const params,char ch);
     void     PrintGesture(gesture_t* gesture);
+    void     PrintOrientation(unsigned short orientation);
     void     GestureMenuSetDefaults(tGestureMenuParams * const params);
     tMLError GestureMenuSetMpl(tGestureMenuParams const * const params);
 

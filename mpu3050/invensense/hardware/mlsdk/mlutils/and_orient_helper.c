@@ -3,8 +3,8 @@ void ComputeAndOrientation(float heading, float euler[3], float* result) {
 
     result[0] = heading;
 
-    pitch = euler[1];
-    roll  = euler[0];
+    pitch = euler[0];
+    roll  = euler[1];
 
     //normalize pitch and roll
     if(pitch < 0.0f) {
@@ -22,15 +22,19 @@ void ComputeAndOrientation(float heading, float euler[3], float* result) {
             pitch += 360.0f;
         }
     }
-    //set pitch
-    result[1] = pitch;
-
+    //map pitch and roll to android definitions
+    if(pitch <= 180.0f) {
+        result[1] = -pitch;
+    }
+    if(pitch > 180.0f) {
+        result[1] = 360-pitch;
+    }
     if(roll >= 0.0f && roll <= 90.0f) {
-        result[2] = -roll;
+        result[2] = roll;
     } else if(roll > 90.0f && roll < 270.0f) {
-        result[2] = roll - 180.0f;
+        result[2] = 180.0f - roll;
     } else { // roll >=  270.0f
-        result[2] = 360.0f - roll;
+        result[2] = roll - 360.0f;
     }
 
 }

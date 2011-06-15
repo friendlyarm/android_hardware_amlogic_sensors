@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: mlmath.h 3958 2010-11-02 22:51:42Z mcaramello $ 
+ * $Id: mlmath.h 4483 2011-01-18 22:46:29Z nroyer $ 
  * 
  *******************************************************************************/
 
@@ -80,11 +80,15 @@ double  ml_acos(double);
 #endif
 
 #ifndef ABS
-#define ABS(x)(((x)>=0)?(x):-(x))
+#define ABS(x) (((x)>=0)?(x):-(x))
 #endif
 
 #ifndef MIN
-#define MIN(x,y)(((x)<(y))?(x):(y))
+#define MIN(x,y) (((x)<(y))?(x):(y))
+#endif
+
+#ifndef MAX
+#define MAX(x,y) (((x)>(y))?(x):(y))
 #endif
 
 /*---------------------------*/

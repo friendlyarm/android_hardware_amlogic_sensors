@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: compass.c 4175 2010-11-25 01:24:24Z nroyer $
+ * $Id: compass.c 5043 2011-03-18 22:08:25Z nroyer $
  *
  *******************************************************************************/
 
@@ -43,7 +43,7 @@
 #undef MPL_LOG_TAG
 #define MPL_LOG_TAG "MPL-compass"
 
-#define _compassDebug(x) //{x}
+#define COMPASS_DEBUG 0
 
 /* --------------------- */
 /* - Global Variables. - */
@@ -73,7 +73,9 @@ unsigned char CompassGetPresent( void )
 {
     INVENSENSE_FUNC_START;
     struct mldl_cfg * mldl_cfg = MLDLGetCfg();
-    if (NULL != mldl_cfg->compass && NULL != mldl_cfg->compass->resume)
+    if (NULL != mldl_cfg->compass && 
+        NULL != mldl_cfg->compass->resume &&
+        mldl_cfg->requested_sensors & ML_THREE_AXIS_COMPASS)
         return TRUE;
     else 
         return FALSE;
@@ -133,7 +135,9 @@ tMLError CompassGetData(long* data)
           ignore this compass data sample. ---*/
     result = (tMLError)mpu3050_read_compass(mldl_cfg, MLSerialGetHandle(), tmp);
     if (result) {
-        _compassDebug( MPL_LOGV("mpu3050_read_compass returned %d (%s)\n", result, MLErrorCode(result)) );
+        if (COMPASS_DEBUG) {
+            MPL_LOGV("mpu3050_read_compass returned %d\n", result);
+        }
         return result;
     }
     for (ii = 0 ; ii < 3 ; ii++) {
@@ -173,7 +177,9 @@ tMLError CompassGetData(long* data)
     } else {
         result = (tMLError)mpu3050_read_compass(mldl_cfg, MLSerialGetHandle(), tmp);
         if (result) {
-            _compassDebug( MPL_LOGV("mpu3050_read_compass returned %d (%s)\n", result, MLErrorCode(result)) );
+            if (COMPASS_DEBUG) {
+                MPL_LOGV("mpu3050_read_compass returned %d\n", result);
+            }
             return result;
         }
         for (ii = 0 ; ii < 3 ; ii++) {
@@ -217,9 +223,48 @@ tMLError CompassSetBias(long *bias)
         biasB[2] = biasC[0]*orC[6] + biasC[1]*orC[7] + biasC[2]*orC[8];
 
         result = MLDLSetMemoryMPU( KEY_CPASS_BIAS_X, 4, Long32ToBig8(biasB[0], reg) );
-        result = MLDLSetMemoryMPU( KEY_CPASS_BIAS_X, 4, Long32ToBig8(biasB[1], reg) );
-        result = MLDLSetMemoryMPU( KEY_CPASS_BIAS_X, 4, Long32ToBig8(biasB[2], reg) );
+        result = MLDLSetMemoryMPU( KEY_CPASS_BIAS_Y, 4, Long32ToBig8(biasB[1], reg) );
+        result = MLDLSetMemoryMPU( KEY_CPASS_BIAS_Z, 4, Long32ToBig8(biasB[2], reg) );
     }
+    return result;
+}
+
+tMLError CompassWriteReg(unsigned char reg, unsigned char val)
+{
+    struct ext_slave_config config;
+    unsigned char data[2];
+    tMLError result;
+
+    data[0] = reg;
+    data[1] = val;
+
+    config.key = MPU_SLAVE_WRITE_REGISTERS;
+    config.len = 2;
+    config.apply = TRUE;
+    config.data = data;
+
+    result = mpu3050_config_compass(MLDLGetCfg(), MLSerialGetHandle(), &config);
+    ERROR_CHECK(result);
+    return result;
+}
+
+tMLError CompassReadReg(unsigned char reg, unsigned char *val)
+{
+    struct ext_slave_config config;
+    unsigned char data[2];
+    tMLError result;
+
+    data[0] = reg;
+
+    config.key = MPU_SLAVE_READ_REGISTERS;
+    config.len = 2;
+    config.apply = TRUE;
+    config.data = data;
+
+    result = mpu3050_get_config_compass(MLDLGetCfg(), MLSerialGetHandle(),
+                                        &config);
+    ERROR_CHECK(result);
+    *val = data[1];
     return result;
 }
 

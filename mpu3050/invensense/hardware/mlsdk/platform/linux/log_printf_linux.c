@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: log_printf_linux.c 4073 2010-11-16 01:09:35Z mcaramello $ 
+ * $Id: log_printf_linux.c 4894 2011-02-28 23:01:53Z prao $ 
  *
  ******************************************************************************/
  
@@ -22,7 +22,7 @@
 
 int _MLWriteLog (const char * buf, int buflen)
 {
-    return puts(buf);
+    return fputs(buf, stdout);
 }
 
 /**

@@ -3,174 +3,139 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
+
 /******************************************************************************
  *
- * $Id: consoledmp.c 4201 2010-11-29 19:30:49Z prao $
+ * $Id: consoledmp.c 5144 2011-04-05 18:09:41Z mcaramello $
  *
  *****************************************************************************/
-
-#define CONFIG_SENSORS_KXTF9 y
 
 #include <stdio.h>
 #include <time.h>
 #include <sys/select.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 
+#include "mltypes.h"
 #include "ml.h"
 #include "mldl.h"
-#include "accel.h"
+#include "slave.h"
 #include "compass.h"
 #include "mlFIFO.h"
 #include "int.h"
 #include "mpu.h"
 #include "mldl_cfg.h"
 #include "mlsupervisor_9axis.h"
+#include "ml_mputest.h"
+#include "mlstates.h"
+#include "ml_stored_data.h"
 
 #include "gesture.h"
 #include "orientation.h"
 #include "mlMathFunc.h"
-
-#include "log.h"
-#include "mlmath.h"
 
 #include "helper.h"
 #include "mlsetup.h"
 #include "mputest.h"
 
 #include "gestureMenu.h"
+#include "timerirq.h"
 
+#include "mlos.h"
+#include "mlmath.h"
+#include "log.h"
+#undef MPL_LOG_TAG
+#define MPL_LOG_TAG "main:"
 
-#define abs(x) ((x)<0?(-x):(x))
+#define TIMERIRQ_NAME "/dev/timerirq"
 
-static int setup_calibration(void)
-{
-    struct ext_slave_descr* accel;
-    struct mldl_cfg *mldl_cfg = MLDLGetCfg();
-
-    MPL_LOGI("Calibrating '%s'\n", __func__);
-
-    /* Interrupt configuration */
-    mldl_cfg->pdata->int_config = 0x10;
-    /* Gyro Calibration */
-    memset(mldl_cfg->pdata->orientation,0,
-           sizeof(mldl_cfg->pdata->accel.orientation));
-    mldl_cfg->pdata->orientation[0] = 1;
-    mldl_cfg->pdata->orientation[4] = -1;
-    mldl_cfg->pdata->orientation[8] = -1;
-    
-    /* Kionix Calibration */
-    accel = kxtf9_get_slave_descr();
-    memcpy(mldl_cfg->accel,accel,sizeof(*accel));
-    memset(mldl_cfg->pdata->accel.orientation,0,
-           sizeof(mldl_cfg->pdata->accel.orientation));
-    mldl_cfg->pdata->accel.orientation[1] =  1;   // X is -Y
-    mldl_cfg->pdata->accel.orientation[3] =  1;   // Y is X
-    mldl_cfg->pdata->accel.orientation[8] = -1;   // Y is X
-    mldl_cfg->pdata->accel.adapt_num = 0;
-    mldl_cfg->pdata->accel.bus       = EXT_SLAVE_BUS_SECONDARY;
-    mldl_cfg->pdata->accel.address   = 0x0f;
-    mldl_cfg->pdata->accel.get_slave_descr = kxtf9_get_slave_descr;
-}
-
-
+/* 
+    Globals 
+*/
 static tGestureMenuParams gestureMenuParams;
-unsigned int flag=0x2;
+unsigned int flag = 0x2;
 
-// Keyboard hit function
-int kbhit(void)
-{
-    struct timeval tv;
-    fd_set read_fd;
-
-    tv.tv_sec=0;
-    tv.tv_usec=0;
-    FD_ZERO(&read_fd);
-    FD_SET(0,&read_fd);
-
-    if(select(1, &read_fd, NULL, NULL, &tv) == -1)
-        return 0;
-
-    if(FD_ISSET(0,&read_fd))
-        return 1;
-
-    return 0;
-}
-
-
-// Motion/no motion callback function
+/* Motion/no motion callback function */
 void onMotion(unsigned short motionType)
 {
-
     switch(motionType) {
-
         case ML_MOTION:
             MPL_LOGI("Motion\n");
             break;
-
         case ML_NO_MOTION:
             MPL_LOGI("No Motion\n");
             break;
-
         default:
             break;
     }
-
 }
 
-//Heading Information for Compass
+/* Heading Information for Compass */
 void headingInfo(void)
 { 
     float hInfo[4];
-    float eulerAngle[3] = {0,0,0};
-    
-    tMLError result;
+    float eulerAngle[3];
 
     if (flag & 0x40) {
-        MLGetFloatArray(ML_EULER_ANGLES,eulerAngle);
-        MLGetFloatArray(ML_HEADING,hInfo);
-        MPL_LOGI("Heading : %+12.3f    Euler Angle : %12.3f    %12.3f    %12.3f \n",hInfo[0],eulerAngle[0],eulerAngle[1],eulerAngle[2]);
+        CALL_N_CHECK(MLGetFloatArray(ML_EULER_ANGLES, eulerAngle));
+        CALL_N_CHECK(MLGetFloatArray(ML_HEADING, hInfo));
+        MPL_LOGI(
+            "Heading : %+12.3f    Euler Angle : %12.3f    %12.3f    %12.3f \n",
+            hInfo[0], eulerAngle[0], eulerAngle[1], eulerAngle[2]);
     }
 }
 
 void dumpData(void)
 {
     if (flag & 0x20) {
-        int ii;
         float data[6];
-        float compData[4];
-        long fixedData[6];
-        FIFOGetAccel(fixedData);
-        FIFOGetGyro(&fixedData[3]);
-        for (ii = 0; ii < 6; ii++) {
-            data[ii] = fixedData[ii] / 65536.0f;
+        float compData[3];
+
+        memset(data, 0, sizeof(data));
+        memset(compData, 0, sizeof(compData));
+
+        if (MLDLGetCfg()->requested_sensors & ML_THREE_AXIS_ACCEL) {
+            CALL_N_CHECK(MLGetFloatArray(ML_ACCELS, data));
         }
-        MLGetFloatArray(ML_MAGNETOMETER,compData);
+        
+        if (MLDLGetCfg()->requested_sensors & ML_THREE_AXIS_GYRO) {
+            CALL_N_CHECK(MLGetFloatArray(ML_GYROS, &data[3]));
+        }
+        if (MLDLGetCfg()->requested_sensors & ML_THREE_AXIS_COMPASS) {
+            CALL_N_CHECK(MLGetFloatArray(ML_MAGNETOMETER, compData));
+        }
 
         MPL_LOGI(("A: %12.4f %12.4f %12.4f "
                   "G: %12.4f %12.4f %12.4f "
                   "C: %12.4f %12.4f %12.4f \n"),
                  data[0], data[1], data[2],
                  data[3], data[4], data[5],
-                 compData[0],compData[1],compData[2]);
-	}
+                 compData[0], compData[1], compData[2]);
+    }
 }
 
 // Processed data callback function
 void processedData(void)
 {
     if (flag & 0x80) {
-        float quat[4] = {1, 0, 0, 0};
-        FIFOGetQuaternionFloat(quat);
-        MPL_LOGI("%12.4f %12.4f %12.4f %12.4f\n",
-                 quat[0],quat[1],quat[2],quat[3]);
+        float checksum = 0.0;
+        float quat[4];
+        int i;
+
+        CALL_N_CHECK(FIFOGetQuaternionFloat(quat));
+        for(i = 0; i < 4; i++)
+            checksum += (quat[i] * quat[i]);
+        MPL_LOGI("%12.4f %12.4f %12.4f %12.4f    -(%12.4f)\n",
+                 quat[0], quat[1], quat[2], quat[3], sqrtf(checksum));
     }
 }
 
 //Orientation callback function
 void onOrientation(unsigned short orientation)
 {
-    // Determine if it was a flip
+    /* Determine if it was a flip */
     static int sLastOrientation = 0;
     int flip = orientation | sLastOrientation;
 
@@ -181,6 +146,7 @@ void onOrientation(unsigned short orientation)
     } else if ((ML_Z_UP | ML_Z_DOWN) == flip) {
         MPL_LOGI("Flip about the Z axis: \n");
     }
+
     sLastOrientation = orientation;
 
     switch (orientation) {
@@ -207,136 +173,215 @@ void onOrientation(unsigned short orientation)
     }
 }
 
-int test_register_dump() 
+int test_register_dump(void) 
 {
-    int ii;
+    unsigned int error = FALSE;
     unsigned char data;
     unsigned short res;
-    unsigned int error = FALSE;
     static char buf[256];
     static char tmp[16];
+    int ii;
     
-    // Successful whoami read.  Now read all registers
+    /* Successful whoami read.  Now read all registers */
     MPL_LOGD("Register Dump:\n    ");
     MPL_LOGD("        00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n");
     MPL_LOGD("         |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |\n");
-    snprintf(buf,sizeof(buf), "    %02d: ", 0);
+    snprintf(buf, sizeof(buf), "    %02d: ", 0);
     for (ii = 0; ii < NUM_OF_MPU_REGISTERS; ii++) {
-        res = MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
-                             ii, 1, &data);
-        
+        res = MLSLSerialRead(
+                MLSerialGetHandle(), MLDLGetMPUSlaveAddr(), ii, 1, &data);
         if (ML_SUCCESS != res) { 
-            snprintf(tmp,sizeof(buf),"-- ");
-            strcat(buf,tmp);
+            snprintf(tmp, sizeof(buf), "-- ");
+            strcat(buf, tmp);
             error = TRUE;
         } else {
-            snprintf(tmp,sizeof(buf),"%02x ",data);
-            strcat(buf,tmp);
+            snprintf(tmp,sizeof(buf), "%02x ", data);
+            strcat(buf, tmp);
         }
-        if ((ii+1) % 16 == 0) {
-            MPL_LOGD("%s\n",buf);
-            snprintf(buf,sizeof(buf),"    %02d: ", 1+(ii / 16));
+        if ((ii + 1) % 16 == 0) {
+            MPL_LOGD("%s\n", buf);
+            snprintf(buf, sizeof(buf), "    %02d: ", 1 + (ii / 16));
         }
     }
-    MPL_LOGD("%s\n",buf);
+    MPL_LOGD("%s\n", buf);
 
     return error;
 }
 
+int start_timerirqs(const char **ints, int *handles, int num_handles)
+{
+    int result;
+    int ii;
+    for (ii = 0; ii < num_handles; ii++) {
+        if (0 == strcmp(ints[ii], TIMERIRQ_NAME)) {
+            /* Check to see if the curren sensors are enabled */
+            if ((MLDLGetCfg()->requested_sensors & ML_DMP_PROCESSOR &&
+                 ii == INTSRC_MPU)
+                ||
+                (!(MLDLGetCfg()->requested_sensors & ML_DMP_PROCESSOR) &&
+                 MLDLGetCfg()->requested_sensors & ML_THREE_AXIS_ACCEL
+                 && ii == INTSRC_AUX1)
+                ||
+                (!(MLDLGetCfg()->requested_sensors & ML_SIX_AXIS_GYRO_ACCEL) &&
+                 MLDLGetCfg()->requested_sensors & ML_THREE_AXIS_COMPASS
+                 && ii == INTSRC_AUX2)
+                ||
+                (!(MLDLGetCfg()->requested_sensors & ML_NINE_AXIS) &&
+                 MLDLGetCfg()->requested_sensors & ML_THREE_AXIS_PRESSURE
+                 && ii == INTSRC_AUX3)) {
+                    result = ioctl(handles[ii], TIMERIRQ_START,
+                                   GetSampleStepSizeMs());
+                    if (result) {
+                        MPL_LOGE("TIMERIRQ_START returned %d\n", result);
+                    } else {
+                        MPL_LOGI("TIMERIRQ_STARTed with period %d, %d\n, %lx",
+                                 GetSampleStepSizeMs(), ii, 
+                                 MLDLGetCfg()->requested_sensors);
+                        break;
+                    }
+            }
+        }
+    }
+    return result;
+}
 
-// Main function
+int stop_timerirqs(const char **ints, int *handles, int num_handles)
+{
+    int ii;
+    int result;
+    for (ii = 0; ii < num_handles; ii++) {
+        if (0 == strcmp(ints[ii], TIMERIRQ_NAME)) {
+            result = ioctl(handles[ii], TIMERIRQ_STOP, 0);
+            if (result) {
+                MPL_LOGE("TIMERIRQ_STOP returned %d\n", result);
+            }
+        }
+    }
+    return result;
+}
+
+/* Main function */
 int main(int argc, char *argv[])
 {
-    unsigned short accelId = ID_INVALID;
-    unsigned short compassId = ID_INVALID;
-    unsigned char  reg[32];
+    unsigned short accelid = ID_INVALID;
+    unsigned short compassid = ID_INVALID;
+    unsigned char reg[32];
     unsigned char *verStr;
     int key = 0, oldKey;
     int result;
-    int index;
-    int interror;
+    int ii;
+    int intstatus;
+    const char *ints[5];
+    int handles[DIM(ints)];
 
-    MLVersion(&verStr);
-    MPL_LOGI("%s\n",verStr);
+    CALL_N_CHECK(MLVersion(&verStr));
+    MPL_LOGI("%s\n", verStr);
 
-    CALL_CHECK_N_RETURN( MLSerialOpen("/dev/mpu") );
-
-    if( ML_SUCCESS == MenuHwChoice(&accelId, &compassId)) {
-        CALL_CHECK_N_RETURN( SetupPlatform(PLATFORM_ID_MSB, accelId, compassId) );
+    if(ML_SUCCESS == MenuHwChoice(&accelid, &compassid)) {
+#ifdef M_HW
+        CALL_CHECK_N_RETURN_ERROR(SetupPlatform(PLATFORM_ID_MANTIS_MSB,
+                                                accelid, compassid));
+#else
+        CALL_CHECK_N_RETURN_ERROR(SetupPlatform(PLATFORM_ID_MSB,
+                                                accelid, compassid));
+#endif
     }
-    interror = IntOpen("/dev/mpuirq");
 
-    CALL_CHECK_N_RETURN( MLDmpOpen() );
+    CALL_CHECK_N_RETURN_ERROR(MLSerialOpen("/dev/mpu"));
 
-    CALL_CHECK_N_RETURN( MLSetBiasUpdateFunc(ML_ALL) );
-    CALL_CHECK_N_RETURN( MLEnable9axisFusion() );
+    ints[0]  = "/dev/mpuirq";
+    ints[1] = "/dev/accelirq";
+    ints[2] = TIMERIRQ_NAME; // "/dev/compassirq";
+    ints[3] = "/dev/pressureirq";
+    ints[4] = "/dev/mpu";
 
-    // Register callback function to detect "motion" or "no motion"
-    CALL_CHECK_N_RETURN( MLSetMotionCallback(onMotion) );
+    intstatus = ML_SUCCESS;
+    IntOpen(ints, handles, DIM(ints) - 1);
+    handles[4] = (int)MLSerialGetHandle();
+    MPL_LOGI("/dev/mpu: %d\n", handles[4]);
 
-    // Register processed data callback function
-//    DataLoggerSelector(0x10);
-//    CALL_CHECK_N_RETURN( MLSetProcessedDataCallback(DataLoggerCb) );
+    for (ii = 0; ii < DIM(handles); ii++) {
+        if (handles[ii] < 0) {
+            MPL_LOGE("IntOpen failed for %d, switching to timerirq\n", ii);
+            handles[ii] = open(TIMERIRQ_NAME, O_RDWR);
+            if (handles[ii] < 0) {
+                MPL_LOGE("%s open failed, polling\n", TIMERIRQ_NAME);
+                intstatus = ML_ERROR;
+            } else {
+                ints[ii] = TIMERIRQ_NAME;
+            }
+        } else {
+            int flags;
+            fcntl(handles[ii], F_GETFL, &flags);
+            fcntl(handles[ii], F_SETFL, flags | O_NONBLOCK);
+        }
+    }
 
-    // Set up orientation
-    CALL_CHECK_N_RETURN( MLEnableOrientation() );
-    CALL_CHECK_N_RETURN( MLSetOrientations(ML_ORIENTATION_ALL) );
-    CALL_CHECK_N_RETURN( MLSetOrientationCallback(onOrientation) );
+    CALL_CHECK_N_RETURN_ERROR(MLDmpOpen());
 
-    //Register gestures to be detected
-    CALL_CHECK_N_RETURN( MLEnableGesture() );
-    CALL_CHECK_N_RETURN( MLSetGestureCallback(PrintGesture) );
-    CALL_CHECK_N_RETURN( MLSetGestures(ML_GESTURE_ALL) );
+    CALL_CHECK_N_RETURN_ERROR(MLSetBiasUpdateFunc(ML_ALL));
+    CALL_CHECK_N_RETURN_ERROR(MLEnable9axisFusion());
+    CALL_CHECK_N_RETURN_ERROR(MLEnableTempComp());
 
-    // Set up default parameters and gesture menu
+    /* Register callback function to detect "motion" or "no motion" */
+    CALL_CHECK_N_RETURN_ERROR(MLSetMotionCallback(onMotion));
+
+    /* Set up orientation */
+    CALL_CHECK_N_RETURN_ERROR(MLEnableOrientation());
+    CALL_CHECK_N_RETURN_ERROR(MLSetOrientations(ML_ORIENTATION_ALL));
+    CALL_CHECK_N_RETURN_ERROR(MLSetOrientationCallback(onOrientation));
+
+    /* Register gestures to be detected */
+    CALL_CHECK_N_RETURN_ERROR(MLEnableGesture());
+    CALL_CHECK_N_RETURN_ERROR(MLSetGestureCallback(PrintGesture));
+    CALL_CHECK_N_RETURN_ERROR(MLSetGestures(ML_GESTURE_ALL));
+
+    /* Set up default parameters and gesture menu */
     GestureMenuSetDefaults(&gestureMenuParams);
-    CALL_CHECK_N_RETURN( GestureMenuSetMpl(&gestureMenuParams) );
+    CALL_CHECK_N_RETURN_ERROR(GestureMenuSetMpl(&gestureMenuParams));
     
-    CALL_CHECK_N_RETURN( FIFOSendQuaternion(ML_32_BIT) );
-    CALL_CHECK_N_RETURN( FIFOSendGyro(ML_ALL,ML_32_BIT) );        
-    CALL_CHECK_N_RETURN( FIFOSendAccel(ML_ALL,ML_32_BIT) );
-  
-    CALL_CHECK_N_RETURN( MLSetFIFORate(6) );
-    CALL_CHECK_N_RETURN( MLSetDataMode(ML_DATA_FIFO) );
-  
-    // Check to see if interrupts are available.  If so use them
-    if (ML_SUCCESS == interror) {
-        CALL_CHECK_N_RETURN(MLSetFifoInterrupt(TRUE));
-        CALL_CHECK_N_RETURN(MLSetMotionInterrupt(TRUE));
-        CALL_CHECK_N_RETURN( IntSetTimeout(100) );
+    /* Set up FIFO */
+    CALL_CHECK_N_RETURN_ERROR(FIFOSendQuaternion(ML_32_BIT));
+    CALL_CHECK_N_RETURN_ERROR(FIFOSendGyro(ML_ALL, ML_32_BIT));        
+    CALL_CHECK_N_RETURN_ERROR(FIFOSendAccel(ML_ALL, ML_32_BIT));
+    CALL_CHECK_N_RETURN_ERROR(MLSetFIFORate(6));
 
+    /* Check to see if interrupts are available.  If so use them */
+    if (ML_SUCCESS == intstatus) {
+        CALL_CHECK_N_RETURN_ERROR(MLSetFifoInterrupt(TRUE));
+        CALL_CHECK_N_RETURN_ERROR(MLSetMotionInterrupt(TRUE));
         MPL_LOGI("Interrupts Configured\n");
         flag |= 0x04;
-    } 
-    else {
+        start_timerirqs(ints, handles, DIM(handles));
+    } else {
         MPL_LOGI("Interrupts unavailable on this platform\n");
         flag &= ~0x04;
     }
            
-    CALL_CHECK_N_RETURN( MLDmpStart() );
+    CALL_CHECK_N_RETURN_ERROR(MLDmpStart());
     
     PrintGestureMenu(&gestureMenuParams);
     test_register_dump();
+
     MPL_LOGI("Starting using flag %d\n", flag);
     
-    //Loop
     while (1) {
-        result = kbhit();
+        result = ConsoleKbhit();
         if (result) {
             oldKey = key;
-            key = getchar();
+            key = ConsoleGetChar();
         } else {
             oldKey = 0;
             key = 0;
         }
 
-        if (key=='q') {
+        if (key == 'q') {
             MPL_LOGI("quit...\n");
             break;
-        } else if (key=='0') {
+        } else if (key == '0') {
             MPL_LOGI("flag = 0\n");
             flag  = 0;
-        } else if (key=='1') {
+        } else if (key == '1') {
             if (flag & 1) {
                 MPL_LOGI("flag &= ~1 - who am i\n");
                 flag &= ~1;
@@ -344,7 +389,7 @@ int main(int argc, char *argv[])
                 MPL_LOGI("flag |=  1 - who am i\n");
                 flag |= 1;
             }
-        } else if (key=='2') {
+        } else if (key == '2') {
             if (flag & 2) {
                 MPL_LOGI("flag &= ~2 - MLUpdateData()\n");
                 flag &= ~2;
@@ -352,7 +397,7 @@ int main(int argc, char *argv[])
                 MPL_LOGI("flag |=  2 - MLUpdateData()\n");
                 flag |= 2;
             }
-        } else if (key=='4') {
+        } else if (key == '4') {
             if (flag & 4) {
                 MPL_LOGI("flag &= ~4 - IntProcess()\n");
                 flag &= ~4;
@@ -360,7 +405,7 @@ int main(int argc, char *argv[])
                 MPL_LOGI("flag |=  4 - IntProcess()\n");
                 flag |= 4;
             }
-        } else if (key=='a') {
+        } else if (key == 'v') {
             if (flag & 0x80) {
                 MPL_LOGI("flag &= ~0x80 - Quaternion\n");
                 flag &= ~0x80;
@@ -372,7 +417,7 @@ int main(int argc, char *argv[])
                 if (ML_SUCCESS != MLSetProcessedDataCallback(processedData))
                     MPL_LOGI("could not set the callbacki\n");
             }
-        } else if (key=='b') {
+        } else if (key == 'b') {
             if (flag & 0x20) {
                 MPL_LOGI("flag &= ~0x20 - dumpData()\n");
                 flag &= ~0x20;
@@ -380,7 +425,7 @@ int main(int argc, char *argv[])
                 MPL_LOGI("flag |=  0x20 - dumpData()\n");
                 flag |= 0x20;
             }                      
-        } else if (key=='c') {
+        } else if (key == 'c') {
             if (flag & 0x40) {
                 MPL_LOGI("flag &= ~0x40 - Heading & Euler Angle\n");
                 flag &= ~0x40;
@@ -388,112 +433,107 @@ int main(int argc, char *argv[])
                 MPL_LOGI("flag |=  0x40 - Heading & Euler Angle\n");
                 flag |= 0x40;
             }
-        } else if ( key == 't' ) {
+        } else if (key  ==  't') {
             test_register_dump();
-#ifdef MPU_FT_MPL_INTEGRATION
-        } else if (key=='f') {
+#ifndef M_HW
+        } else if (key == 'V') {
             key = oldKey;
-            MPL_LOGI("factory test...\n");
-            MPL_LOGI("\tstopping MPL\n");
-            CALL_CHECK_N_RETURN( MLDmpStop() );
+            MPL_LOGI("run MPU Self-Test...\n");
+            CALL_CHECK_N_RETURN_ERROR(MLSelfTestRun());
             MLOSSleep(5);
-            MPL_LOGI("\trunning test\n");
-            CALL_CHECK_N_RETURN( FactoryCalibrate(MLSerialGetHandle()) );
-            MLOSSleep(5);
-            MPL_LOGI("\trestarting MPL\n");
-            CALL_CHECK_N_RETURN( MLDmpStart() );
             continue;
-        } else if (key=='l') {
+#endif
+        } else if (key == 'l') {
             key = oldKey;
             MPL_LOGI("load calibration...\n");
             MPL_LOGI("\tstopping MPL\n");
-            CALL_CHECK_N_RETURN( MLDmpStop() );
+            CALL_CHECK_N_RETURN_ERROR(MLDmpStop());
             MLOSSleep(5);
             MPL_LOGI("\tloading calibration\n");
-            CALL_CHECK_N_RETURN( LoadCalibration() );
+            CALL_CHECK_N_RETURN_ERROR(MLLoadCalibration());
             MLOSSleep(5);
             MPL_LOGI("\trestarting MPL\n");
-            CALL_CHECK_N_RETURN( MLDmpStart() );
+            CALL_CHECK_N_RETURN_ERROR(MLDmpStart());
             continue;
-#endif
-        } else if (key=='h') {
+        } else if (key == 's') {
+            static int toggle = 1;
+            if (toggle) {
+                MPL_LOGI("\tMLDmpStop\n");
+                CALL_CHECK_N_RETURN_ERROR(MLDmpStop());
+            } else {
+                MPL_LOGI("\tMLDmpStart\n");
+                CALL_CHECK_N_RETURN_ERROR(MLDmpStart());
+            }
+            toggle = toggle? 0:1;
+            continue;
+        } else if (key == 'h') {
             printf(
                 "\n\n"
                 "0   -   turn all the features OFF\n"
                 "1   -   read WHO_AM_I\n"
                 "2   -   call MLUpdateData()\n"
                 "4   -   call IntProcess()\n"
-                "a   -   print Quaternion data\n"
+                "v   -   print Quaternion data\n"
                 "b   -   Print raw accel and gyro data\n"
                 "c   -   Heading & Euler Angle information\n"
                 "t   -   dump register information\n"
-            );
-#ifdef MPU_FT_MPL_INTEGRATION
-            printf(
-                "f   -   interrupt execution and run functional test\n"
+                "(Sh-V) -interrupt execution and run functional test\n"
                 "l   -   load calibration from file\n"
-            );
-#endif
-            printf(
                 "h   -   show this help\n"
                 "\n\n"
-            );
+               );
             PrintGestureMenu(&gestureMenuParams);
         } else {
             (void)GestureMenuProcessChar(&gestureMenuParams, key);
+            if (key == 'f' || key == 'F' || key == 'S') {
+                stop_timerirqs(ints, handles, DIM(handles));
+                start_timerirqs(ints, handles, DIM(handles));
+            }
         }
 
-#if 1
         if (flag & 1) {
-            CALL_CHECK_N_RETURN( MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),0,1,reg) );
-            MPL_LOGI("\nreg[0]=%02x\n",reg[0]);
+            CALL_CHECK_N_RETURN_ERROR(MLSLSerialRead(MLSerialGetHandle(), 
+                                                      MLDLGetMPUSlaveAddr(), 0, 1, reg));
+            MPL_LOGI("\nreg[0]=%02x\n", reg[0]);
             flag &= ~1;
         }
-#endif
-#if 1
         if (flag & 2) {
-            result = MLUpdateData();
-            if (ML_SUCCESS != result) {
-                MPL_LOGE("MLUpdateData returned %d\n", result);
-            }
+            if (MLGetState() == ML_STATE_DMP_STARTED)
+                CALL_N_CHECK(MLUpdateData());
         }
-#endif
-#if 1
         if (flag & 4) {
-            struct mpuirq_data data;
-            memset(&data,0,sizeof(data));
-            if (IntProcess(&data, 0, 500000) > 0) {
-                if (data.interruptcount) {
-                    MLDLIntHandler(INTSRC_MPU);
-                }
+            /* Long sleep, long enough to overflow the fifo so as to make it
+             * obvious when it doesn't work */
+            struct mpuirq_data **data;
+            data = InterruptPoll(handles, DIM(handles), 2, 500000);
+            if (data[4]->interruptcount) {
+                ioctl(handles[4], MPU_PM_EVENT_HANDLED, 0);
             }
+            InterruptPollDone(data);
+        } else {
+            MLOSSleep(GetSampleStepSizeMs());
         }
-#endif
-#if 1
         if (flag & 0x20) {
             dumpData();
         }
-#endif
-#if 1
         if (flag & 0x40) {
             headingInfo();
         }
-#endif
-        //Adding Sleep of 5ms
-        usleep(5000);
-    }    // end of while(1)
+    }    /* end of while(1) */
 
-    CALL_CHECK_N_RETURN( MLDisableOrientation() );
+    stop_timerirqs(ints, handles, DIM(handles));
+    CALL_CHECK_N_RETURN_ERROR(MLDisableOrientation());
 
-    // Close Motion Library
-    printf("StoreCalibration\n");
-    CALL_CHECK_N_RETURN( StoreCalibration() );
+    /* Close Motion Library */
+    CALL_CHECK_N_RETURN_ERROR(MLDmpStop());
 
-    CALL_CHECK_N_RETURN( MLDmpStop() );
-    CALL_CHECK_N_RETURN( MLDmpClose() );
-    CALL_CHECK_N_RETURN( MLSerialClose() );
+    printf("MLStoreCalibration\n");
+    CALL_CHECK_N_RETURN_ERROR(MLStoreCalibration());
 
-    IntClose();
+    CALL_CHECK_N_RETURN_ERROR(MLDmpClose());
+    CALL_CHECK_N_RETURN_ERROR(MLSerialClose());
+
+    IntClose(handles, DIM(handles));
 
     return ML_SUCCESS;
 }

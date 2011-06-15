@@ -5,110 +5,113 @@
  */
 /*******************************************************************************
  *
- * $Id: helper.c 3698 2010-09-08 21:08:34Z yserlin $
+ * $Id: helper.c 4367 2010-12-21 03:02:55Z prao $
  *
  *******************************************************************************/
 
 #include <stdio.h>
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
+#include <conio.h>
 #endif
+#ifdef LINUX
+#include <sys/select.h>
+#endif
+#include <time.h>
+#include <string.h>
 
 #include "ml.h"
-#include "accel.h"
+#include "slave.h"
 #include "mldl.h"
 #include "mltypes.h"
 #include "mlstates.h"
 #include "compass.h"
 
 #include "mlsl.h"
+#include "ml.h"
 
 #include "helper.h"
 #include "mlsetup.h"
 #include "fopenCMake.h"
+#include "int.h"
+#include "mlos.h"
 
 #include "log.h"
 #undef MPL_LOG_TAG
 #define MPL_LOG_TAG "MPL-helper"
 
+#ifdef AIO
+extern tMLError MLSLSetYamahaCompassDataMode(unsigned char mode);
+#endif
 
-
-/** 
- *  Tries to find the serial port for the hardware
-**/
-int findComm(char * port,int size)
+// Keyboard hit function
+int ConsoleKbhit(void)
 {
-    return -1;
+#ifdef _WIN32
+    return _kbhit();
+#else
+    struct timeval tv;
+    fd_set read_fd;
+
+    tv.tv_sec=0;
+    tv.tv_usec=0;
+    FD_ZERO(&read_fd);
+    FD_SET(0,&read_fd);
+
+    if(select(1, &read_fd, NULL, NULL, &tv) == -1)
+        return 0;
+
+    if(FD_ISSET(0,&read_fd))
+        return 1;
+
+    return 0;
+#endif
 }
 
-tMLError findHw(void *mlsl_handle, unsigned short* pAccelId, unsigned short* pCompassId)
+char ConsoleGetChar(void) {
+#ifdef _WIN32
+    return _getch();
+#else
+    return getchar();
+#endif
+}
+struct mpuirq_data** InterruptPoll(int *handles, int numHandles, long tv_sec, long tv_usec)
 {
-    *pAccelId   =  ACCEL_KIONIX_KXTF9;
-    *pCompassId = ID_INVALID;
-    return ML_SUCCESS;
+    struct mpuirq_data **data;
+    void *tmp;
+    int ii;
+    const int irq_data_size = sizeof(**data) * numHandles + 
+        sizeof(*data) * numHandles +
+        MAX_MPUIRQ_DATA_SIZE * numHandles;
+
+    tmp = (void *)MLOSMalloc(irq_data_size);
+    memset(tmp, 0, irq_data_size);
+    data = (struct mpuirq_data **)tmp;
+    for (ii = 0; ii < numHandles; ii++) {
+        data[ii] = (struct mpuirq_data *)((unsigned long)tmp +
+            (sizeof(*data) * numHandles) + sizeof(**data) * ii);
+        data[ii]->data_size = MAX_MPUIRQ_DATA_SIZE;
+        data[ii]->data = (struct mpuirq_data *)(
+            (unsigned long)tmp +
+            (sizeof(*data) * numHandles) + 
+            (sizeof(**data) * numHandles) +
+            (MAX_MPUIRQ_DATA_SIZE * ii));
+    }
+
+    if (IntProcess(handles, numHandles, data, tv_sec, tv_usec) > 0) {
+        for (ii = 0; ii < numHandles; ii++) {
+            if (data[ii]->interruptcount) {
+                MLDLIntHandler(ii);
+            }
+        }
+    }
+    
+    /* Return data incase the application needs to look at the timestamp or
+       other part of the data */
+    return data;
 }
 
-
-tMLError MenuHwChoice(unsigned short* pAccelId, unsigned short* pCompassId)
+void InterruptPollDone(struct mpuirq_data ** data)
 {
-    char override = '\0';
-
-    if (NULL == pAccelId || NULL == pCompassId) 
-        return ML_ERROR_INVALID_PARAMETER;
-
-    *pAccelId   = 0xffff;
-    *pCompassId = 0xffff;
-
-    while (override != 'y' && override != 'n' && override != '\n') {
-        printf(
-            "\n"
-            "Override driver [y,N]:\n");
-        scanf("%c",&override);
-    }
-
-    if (override == '\n' || override == 'n')
-        return ML_ERROR_FEATURE_NOT_ENABLED;
-
-    printf(
-        "\n"
-        "Accelerometers:\n"
-        "\t0 - Default\n"
-        "\t1 - ST LIS331\n"
-        "\t2 - ST LSM303\n"
-        "\t3 - Kionix KXSD9\n"
-        "\t4 - Kionix KXTF9\n"
-        "\t5 - Bosch BMA150\n"
-        "\t6 - Bosch BMA222\n"
-        "\t7 - ADI\n"
-        "\t8 - FreeScale 8450 \n"
-        "\t9 - FreeScale 8451 \n"
-        "\n"
-    );
-    while (*pAccelId==0xffff || *pAccelId>9) {
-        printf("Which accelerometer ? ");
-        scanf("%hd", pAccelId);
-    }
-
-    printf(
-        "\n"
-        "Compasses:\n"
-        "\t0  - Default\n"
-        "\t10 - AKM\n"
-        "\t11 - AICHI\n"
-        "\t12 - Yamaha\n"
-        "\t13 - Honeywell\n"
-        "\t14 - ST LSM303\n"
-        "\t15 - Memsic\n"
-        "\t16 - Alps HSCDTD002B\n"
-        "\n"
-    );
-    while (*pCompassId==0xffff 
-           || (*pCompassId >COMPASS_ID_HSCDTD002B
-           && (*pCompassId <COMPASS_ID_AKM) && *pCompassId != ID_INVALID)) {
-        printf("Which compass ? ");
-        scanf("%hd", pCompassId);
-    }
-
-    return ML_SUCCESS;
+    MLOSFree(data);
 }
-

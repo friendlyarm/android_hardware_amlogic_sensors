@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: mlstates.c 4084 2010-11-17 02:37:28Z nroyer $
+ * $Id: mlstates.c 4595 2011-01-25 01:43:03Z mcaramello $
  *
  *******************************************************************************/
 
@@ -97,7 +97,9 @@ char* MLStateName(unsigned char state)
  *  @internal
  *  @brief  Perform a transition from the current state to newState.
  *          Check for the correctness of the transition.
- *          Print out an error message if the transition is illegal 
+ *          Print out an error message if the transition is illegal .
+ *          This routine is also called if a certain normally constant parameters
+ *          are changed such as the FIFO Rate.
  *  @param  newState    state we are transitioning to.
  *  @return  
 **/
@@ -106,7 +108,7 @@ tMLError MLStateTransition(unsigned char newState)
     tMLError result = ML_SUCCESS;
 
     if ( newState == ML_STATE_SERIAL_CLOSED ) {
-        MLStateInitCallbacks(); // Always allow transition to closed
+        // Always allow transition to closed
     } else if ( newState == ML_STATE_SERIAL_OPENED ) {
         MLStateInitCallbacks(); // Always allow first transition to start over
     } else if (((newState == ML_STATE_DMP_OPENED) && 
@@ -145,16 +147,16 @@ unsigned char MLGetState(void)
 
 /**
  * @internal
- * @brief   This registers a function to be called for each time the DMP 
- *          generates an an interrupt. 
- *          It will be called after RegisterHighRateProcess() which gets
- *          everytime the FIFO data is processed. 
+ * @brief   This registers a function to be called each time the state 
+ *          changes. It may also be called when the FIFO Rate is changed.
+ *          It will be called at the start of a state change before the
+ *          state change has taken place. See Also MLStateUnRegisterCallback()
  *          The FIFO does not have to be on for this callback.
  * @param func Function to be called when a DMP interrupt occurs.
  * @return ML_SUCCESS or non-zero error code.
  */
 
-tMLError MLStateRegisterCallback( tMLStateChangeCallback callback)
+tMLError MLStateRegisterCallback(tMLStateChangeCallback callback)
 {
     INVENSENSE_FUNC_START;
     int kk;
@@ -190,7 +192,9 @@ tMLError MLStateRegisterCallback( tMLStateChangeCallback callback)
 
 /**
  * @internal
- * @brief This unregisters a function to be called for each DMP interrupt.
+ * @brief   This unregisters a function to be called each time the state 
+ *          changes. See Also MLStateRegisterCallback()
+ *          The FIFO does not have to be on for this callback.
  * @return ML_SUCCESS or non-zero error code.
  */
 tMLError MLStateUnRegisterCallback( tMLStateChangeCallback callback )

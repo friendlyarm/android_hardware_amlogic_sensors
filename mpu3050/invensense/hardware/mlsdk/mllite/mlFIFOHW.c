@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: mlFIFOHW.c 4108 2010-11-20 01:34:54Z nroyer $
+ * $Id: mlFIFOHW.c 4605 2011-01-26 01:20:31Z nroyer $
  *
  *******************************************************************************/
 
@@ -23,8 +23,8 @@
 #include <string.h>
 
 #include "mlFIFOHW.h"
+#include "ml.h"
 #include "mldl.h"
-#include "ml.h" // needed for MLSetDataMode
 #include "mpu.h"
 #include "mldl_cfg.h"
 
@@ -260,36 +260,38 @@ tMLError MLDLReadFifo(unsigned char *data, uint_fast16_t len)
 tMLError FIFOReset(void)
 {
     INVENSENSE_FUNC_START;
-    extern tMLXData mlxData;
-
     int len = FIFO_HW_SIZE;
     unsigned char fifoBuf[2];
     unsigned char tries = 0;
     unsigned char userCtrlReg;
-    unsigned short prevDataMode = mlxData.mlDataMode;
     tMLError result;
+    struct mldl_cfg *mldl_cfg = MLDLGetCfg();
 
-
+    FIFODataHW.fifoCount = 0;
+    if (mldl_cfg->gyro_is_suspended)
+        return ML_SUCCESS;
+    
     result = MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(), 
                             MPUREG_USER_CTRL, 1, &userCtrlReg);
     ERROR_CHECK(result);
 
-    result = MLSetDataMode(0);  ERROR_CHECK(result);
-
-    while(len != 0 && tries < 6) {		
-        MLSLSerialWriteSingle(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
-                              MPUREG_USER_CTRL, 
-                              ((userCtrlReg & (~BIT_FIFO_EN)) | BIT_FIFO_RST));
-        MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
-                       MPUREG_FIFO_COUNTH, 2, fifoBuf );
-        len = (unsigned short)fifoBuf[0]*256+(unsigned short)fifoBuf[1];
+    while(len != 0 && tries < 6) {
+        result = 
+            MLSLSerialWriteSingle(
+                MLSerialGetHandle(), MLDLGetMPUSlaveAddr(), MPUREG_USER_CTRL,
+                ((userCtrlReg & (~BIT_FIFO_EN)) | BIT_FIFO_RST));
+        ERROR_CHECK(result);
+        result = 
+            MLSLSerialRead(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
+                           MPUREG_FIFO_COUNTH, 2, fifoBuf);
+        ERROR_CHECK(result);
+        len = (unsigned short)fifoBuf[0] * 256 + (unsigned short)fifoBuf[1];
         tries++;
     }
-    FIFODataHW.fifoCount = 0;
-    MLSLSerialWriteSingle(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
-                          MPUREG_USER_CTRL, userCtrlReg );	
 
-    MLSetDataMode(prevDataMode);
+    result = MLSLSerialWriteSingle(MLSerialGetHandle(), MLDLGetMPUSlaveAddr(),
+                                   MPUREG_USER_CTRL, userCtrlReg);
+    ERROR_CHECK(result);
 
     return ML_SUCCESS;
 }

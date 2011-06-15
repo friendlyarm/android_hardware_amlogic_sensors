@@ -3,16 +3,16 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
-/*******************************************************************************
+/******************************************************************************
  *
- * $Id: mldl.c 4162 2010-11-24 21:35:52Z prao $
+ * $Id: mldl.c 5079 2011-03-25 22:30:18Z mcaramello $
  *
- *******************************************************************************/
+ *****************************************************************************/
 
 /** 
  *  @defgroup MLDL 
  *  @brief  Motion Library - Driver Layer.
- *          The Motion Library Driver Layer provides the interface to the 
+ *          The Motion Library Driver Layer provides the intrface to the 
  *          system drivers that are used by the Motion Library.
  *
  *  @{
@@ -36,6 +36,8 @@
 #include "dmpKey.h"
 #include "mpu.h"
 #include "mlFIFOHW.h"
+#include "compass.h"
+#include "pressure.h"
 
 #include "log.h"
 #undef MPL_LOG_TAG
@@ -51,9 +53,10 @@
 
 /*---- structure containing control variables used by MLDL ----*/
 static struct mldl_cfg mldlCfg;
-static struct ext_slave_descr accel;
-static struct ext_slave_descr compass;
-static struct mpu3050_platform_data pdata;
+struct ext_slave_descr gAccel;
+struct ext_slave_descr gCompass;
+struct ext_slave_descr gPressure;
+struct mpu3050_platform_data gPdata;
 static void *sMLSLHandle;
 int_fast8_t intTrigger[NUM_OF_INTSOURCES];
 
@@ -84,7 +87,7 @@ void MLDLSetGetAddress( unsigned short (*func)(unsigned short key) )
 /**
  *  @internal
  *  @brief  Check if the feature is supported in the currently loaded
- *          DMP code basing on the fact that the key is assigned a 
+ *          DMP code basing on the fact that the key is assigned a
  *          value or not.
  *  @param  key     the DMP key
  *  @return whether the feature associated with the key is supported
@@ -98,13 +101,13 @@ uint_fast8_t DmpFeatureSupported(unsigned short key)
         MPL_LOGE("%s : sGetAddress is NULL\n", __func__);
         return FALSE;
     }
-    
+
     memAddr = sGetAddress( key );
     if ( memAddr >= 0xffff ) {
         MPL_LOGV("MLDLSetMemoryMPU unsupported key\n");
         return FALSE;
     }
-    
+
     return TRUE;
 }
  
@@ -172,19 +175,18 @@ unsigned short MLDLGetAddress(unsigned short key)
 tMLError MLDLOpen(void *mlslHandle)
 {
     tMLError result;
-    memset(&mldlCfg,  0, sizeof(mldlCfg));
-    memset(&accel,    0, sizeof(accel));
-    memset(&compass,  0, sizeof(compass));
-    memset(&pdata,    0, sizeof(pdata));
-    memset(intTrigger,INT_CLEAR,sizeof(intTrigger));
+    memset(&mldlCfg, 0, sizeof(mldlCfg));
+    memset(intTrigger, INT_CLEAR, sizeof(intTrigger));
 
     sMLSLHandle = mlslHandle;
 
-    mldlCfg.accel   = &accel;
-    mldlCfg.compass = &compass;
-    mldlCfg.pdata   = &pdata;
+    mldlCfg.accel    = &gAccel;
+    mldlCfg.compass  = &gCompass;
+    mldlCfg.pressure = &gPressure;
+    mldlCfg.pdata    = &gPdata;
 
-    result = (tMLError) mpu3050_open(&mldlCfg, sMLSLHandle);
+    result = (tMLError) mpu3050_open(&mldlCfg, sMLSLHandle,
+                                     sMLSLHandle, sMLSLHandle, sMLSLHandle);
     return result;
 }
 
@@ -199,61 +201,114 @@ tMLError MLDLClose(void)
     INVENSENSE_FUNC_START;
     tMLError result = ML_SUCCESS;
     
-    if (!mldlCfg.is_suspended) {
-        result = (tMLError) mpu3050_suspend(&mldlCfg, 
-                                            sMLSLHandle, 
-                                            sMLSLHandle, 
-                                            sMLSLHandle,
-                                            TRUE, TRUE);
-    }
+    result = (tMLError) mpu3050_suspend(&mldlCfg, 
+                                        sMLSLHandle, 
+                                        sMLSLHandle, 
+                                        sMLSLHandle,
+                                        sMLSLHandle,
+                                        TRUE, TRUE, TRUE, TRUE);
+
+    result = (tMLError) mpu3050_close(&mldlCfg, sMLSLHandle, 
+                                      sMLSLHandle, sMLSLHandle, sMLSLHandle);
     /* Clear all previous settings */
     memset(&mldlCfg,  0, sizeof(mldlCfg));
-    memset(&accel,    0, sizeof(accel));
-    memset(&compass,  0, sizeof(compass));
-    memset(&pdata,    0, sizeof(pdata));
     sMLSLHandle = NULL;
+    sGetAddress = NULL;
     return result;
 }
 
 /**
  * @brief Starts the DMP running
  *
+ * Resumes the sensor if any of the sensor axis or components are requested
+ *
+ * @param sensors 
+ * Bitfield of the sensors to turn on.  Combination of the following:
+ *  - ML_X_GYRO
+ *  - ML_Y_GYRO
+ *  - ML_Z_GYRO
+ *  - ML_DMP_PROCESSOR
+ *  - ML_X_ACCEL
+ *  - ML_Y_ACCEL
+ *  - ML_Z_ACCEL
+ *  - ML_X_COMPASS
+ *  - ML_Y_COMPASS
+ *  - ML_Z_COMPASS
+ *  - ML_X_PRESSURE
+ *  - ML_Y_PRESSURE
+ *  - ML_Z_PRESSURE
+ *  - ML_THREE_AXIS_GYRO
+ *  - ML_THREE_AXIS_ACCEL
+ *  - ML_THREE_AXIS_COMPASS
+ *  - ML_THREE_AXIS_PRESSURE
+ *
  * @return ML_SUCCESS or non-zero error code 
  */
-tMLError MLDLDmpStart(void)
+tMLError MLDLDmpStart(unsigned long sensors)
 {
     INVENSENSE_FUNC_START;
     tMLError result = ML_SUCCESS;
 
-    if (mldlCfg.is_suspended) {
-        result = mpu3050_resume(&mldlCfg,
-                                sMLSLHandle,
-                                sMLSLHandle,
-                                sMLSLHandle,
-                                mldlCfg.pdata->accel.get_slave_descr != 0,
-                                mldlCfg.pdata->compass.get_slave_descr != 0);
-    }
+    mldlCfg.requested_sensors = sensors;
+    result = mpu3050_resume(&mldlCfg,
+                            sMLSLHandle,
+                            sMLSLHandle,
+                            sMLSLHandle,
+                            sMLSLHandle,
+                            sensors & ML_THREE_AXIS_GYRO,
+                            sensors & ML_THREE_AXIS_ACCEL,
+                            sensors & ML_THREE_AXIS_COMPASS,
+                            sensors & ML_THREE_AXIS_PRESSURE);
     return result;
 }
 
 /**
- * @brief Stops the DMP running and puts it in low power
+ * @brief Stops the DMP running and puts it in low power as requested
+ *
+ * Suspends each sensor according to the bitfield, if all axis and components
+ * of the sensor is off.
+ *
+ * @param sensors Bitfiled of the sensors to leave on.  Combination of the
+ * following:
+ *  - ML_X_GYRO
+ *  - ML_Y_GYRO
+ *  - ML_Z_GYRO
+ *  - ML_X_ACCEL
+ *  - ML_Y_ACCEL
+ *  - ML_Z_ACCEL
+ *  - ML_X_COMPASS
+ *  - ML_Y_COMPASS
+ *  - ML_Z_COMPASS
+ *  - ML_X_PRESSURE
+ *  - ML_Y_PRESSURE
+ *  - ML_Z_PRESSURE
+ *  - ML_THREE_AXIS_GYRO
+ *  - ML_THREE_AXIS_ACCEL
+ *  - ML_THREE_AXIS_COMPASS
+ *  - ML_THREE_AXIS_PRESSURE
+ *
  *
  * @return ML_SUCCESS or non-zero error code 
  */
-tMLError MLDLDmpStop(void)
+tMLError MLDLDmpStop(unsigned long sensors)
 {
     INVENSENSE_FUNC_START;
     tMLError result = ML_SUCCESS;
 
-    if (!mldlCfg.is_suspended) {
-        result = mpu3050_suspend(&mldlCfg,
-                                 sMLSLHandle,
-                                 sMLSLHandle,
-                                 sMLSLHandle,
-                                 mldlCfg.pdata->accel.get_slave_descr != 0,
-                                 mldlCfg.pdata->compass.get_slave_descr != 0);
-    }
+    result = mpu3050_suspend(&mldlCfg,
+                             sMLSLHandle,
+                             sMLSLHandle,
+                             sMLSLHandle,
+                             sMLSLHandle,
+                             ((sensors & ML_THREE_AXIS_GYRO) 
+                              == ML_THREE_AXIS_GYRO),
+                             ((sensors & ML_THREE_AXIS_ACCEL) 
+                              == ML_THREE_AXIS_ACCEL),
+                             ((sensors & ML_THREE_AXIS_COMPASS) 
+                              == ML_THREE_AXIS_COMPASS),
+                             ((sensors & ML_THREE_AXIS_PRESSURE) 
+                              == ML_THREE_AXIS_PRESSURE)
+        );
     return result;
 }
 
@@ -299,6 +354,7 @@ tMLError MLDLCtrlDmp( unsigned char enableRun,
 
     mldlCfg.dmp_enable  = enableRun;
     mldlCfg.fifo_enable = enableFIFO;
+    mldlCfg.gyro_needs_reset = TRUE;
 
     return ML_SUCCESS;
 }
@@ -323,16 +379,22 @@ tMLError MLDLCtrlDmp( unsigned char enableRun,
 tMLError MLDLCfgInt(unsigned char triggers)
 {
     tMLError result = ML_SUCCESS;
+
+#ifndef M_HW /* Mantis has 8 bits of interrupt config bits */
     if (triggers & !(BIT_MPU_RDY_EN | BIT_DMP_INT_EN | BIT_RAW_RDY_EN) ) {
         return ML_ERROR_INVALID_PARAMETER;
     }
+#endif
+
 
     mldlCfg.int_config = triggers;
-    if (!mldlCfg.is_suspended) {
+    if (!mldlCfg.gyro_is_suspended) {
         result = MLSLSerialWriteSingle(
             sMLSLHandle, mldlCfg.addr,
             MPUREG_INT_CFG,
             (mldlCfg.int_config | mldlCfg.pdata->int_config));
+    } else {
+        mldlCfg.gyro_needs_reset = TRUE;
     }
 
     return result;
@@ -384,6 +446,7 @@ tMLError MLDLCfgSamplingMPU( unsigned char lpf,
 
     mldlCfg.lpf = lpf;
     mldlCfg.divider = divider;
+    mldlCfg.gyro_needs_reset = TRUE;
 
     return ML_SUCCESS;
 }
@@ -400,7 +463,7 @@ tMLError MLDLCfgSamplingMPU( unsigned char lpf,
  *          Full scale range affect the MPU's measurement
  *          sensitivity.
  *
- *  @param  range   
+ *  @param  fullscale
  *              the gyro full scale range in dps.
  *
  *  @return ML_SUCCESS or non-zero error code.
@@ -420,6 +483,7 @@ tMLError MLDLSetFullScaleMPU( float fullScale )
         MPL_LOGE("\tAvailable values : +/- 250 dps, +/- 500 dps, +/- 1000 dps, +/- 2000 dps\n");
         return ML_ERROR_INVALID_PARAMETER;
     }
+    mldlCfg.gyro_needs_reset = TRUE;
 
     return ML_SUCCESS;
 }
@@ -442,6 +506,16 @@ tMLError MLDLSetExternalSyncMPU( unsigned char extSync )
         return ML_ERROR_INVALID_PARAMETER;
     }
     mldlCfg.ext_sync = extSync;
+    mldlCfg.gyro_needs_reset = TRUE;
+
+    return ML_SUCCESS;
+}
+
+tMLError MLDLSetIgnoreSystemSuspend(unsigned char ignore)
+{
+    INVENSENSE_FUNC_START;
+
+    mldlCfg.ignore_system_suspend = ignore;
 
     return ML_SUCCESS;
 }
@@ -449,27 +523,76 @@ tMLError MLDLSetExternalSyncMPU( unsigned char extSync )
 /** 
  * @brief Sets the power state for the Gyro's.
  *
- * This sets the power state of each gyro to be applied the next time 
- * mpu3050_resume is called.
+ * This sets the power state of each gyro.  If the MPU is suspended then it 
+ * applies the next time resume is called.
  * 
  * @param xOn Boolean to turn on the X gyro
  * @param yOn Boolean to turn on the Y gyro
  * @param zOn Boolean to turn on the Z gyro
  * 
- * @return ML_SUCCESS (currently cannot fail)
+ * @return ML_SUCCESS or non-zero error code
  */
-tMLError MLDLSetGyroPower(unsigned char xOn, 
-                          unsigned char yOn, 
-                          unsigned char zOn)
+tMLError MLDLSetGyroPower(unsigned long xOn,
+                          unsigned long yOn,
+                          unsigned long zOn)
 {
     unsigned char power = 0;
-    if (!xOn) power |= BIT_STBY_XG;
-    if (!yOn) power |= BIT_STBY_YG;
-    if (!zOn) power |= BIT_STBY_ZG;
+    tMLError result = ML_SUCCESS;
+    unsigned char b;
 
+    if ( sGetAddress == NULL ) {
+        return ML_ERROR_NOT_OPENED;
+    }
+
+    if (!xOn)
+        power |= BIT_STBY_XG;
+    if (!yOn)
+        power |= BIT_STBY_YG;
+    if (!zOn)
+        power |= BIT_STBY_ZG;
+
+    if (!mldlCfg.gyro_is_suspended && power != mldlCfg.gyro_power) {
+#ifdef M_HW
+        result =
+            MLSLSerialRead(sMLSLHandle, mldlCfg.addr, MPUREG_PWR_MGMT_2, 1,
+                           &b);
+        ERROR_CHECK(result);
+
+        b &= ~(BIT_STBY_XG | BIT_STBY_YG | BIT_STBY_ZG);
+        b |= power;
+        result = MLSLSerialWriteSingle(sMLSLHandle, mldlCfg.addr,
+                                       MPUREG_PWR_MGMT_2, b);
+        ERROR_CHECK(result);
+#else
+        result =
+            MLSLSerialRead(sMLSLHandle, mldlCfg.addr, MPUREG_PWR_MGM, 1,
+                           &b);
+        ERROR_CHECK(result);
+
+        if ((b & BIT_STBY_XG) != ((!xOn) * BIT_STBY_XG)) {
+            b ^= BIT_STBY_XG;
+            result = MLSLSerialWriteSingle(sMLSLHandle, mldlCfg.addr,
+                                           MPUREG_PWR_MGM, b);
+            ERROR_CHECK(result);
+        }
+        if ((b & BIT_STBY_YG) != ((!yOn) * BIT_STBY_YG)) {
+            b ^= BIT_STBY_YG;
+            result = MLSLSerialWriteSingle(sMLSLHandle, mldlCfg.addr,
+                                           MPUREG_PWR_MGM, b);
+            ERROR_CHECK(result);
+        }
+        if ((b & BIT_STBY_ZG) != ((!zOn) * BIT_STBY_ZG)) {
+            b ^= BIT_STBY_ZG;
+            result = MLSLSerialWriteSingle(sMLSLHandle, mldlCfg.addr,
+                                           MPUREG_PWR_MGM, b);
+            ERROR_CHECK(result);
+        }
+#endif
+    } else {
+        mldlCfg.gyro_needs_reset = TRUE;
+    }
     mldlCfg.gyro_power = power;
-
-    return ML_SUCCESS;
+    return result;
 }
 
 /**
@@ -508,6 +631,7 @@ tMLError MLDLClockSource( unsigned char clkSource )
     }
 
     mldlCfg.clk_src = clkSource;
+    mldlCfg.gyro_needs_reset = TRUE;
 
     return ML_SUCCESS;
 }
@@ -524,11 +648,12 @@ tMLError MLDLSetOffsetTC(unsigned char const *tc)
 {
     int ii;
     tMLError result;
-    if (mldlCfg.is_suspended) {
-        for (ii = 0; ii < sizeof(mldlCfg.offset_tc); ii++){
-            mldlCfg.offset_tc[ii] = tc[ii];
-        }
-    } else {
+
+    for (ii = 0; ii < DIM(mldlCfg.offset_tc); ii++){
+        mldlCfg.offset_tc[ii] = tc[ii];
+    }
+
+    if (!mldlCfg.gyro_is_suspended) {
         result = MLSLSerialWriteSingle(sMLSLHandle, mldlCfg.addr,
                                        MPUREG_XG_OFFS_TC, tc[0]);
         ERROR_CHECK(result);
@@ -538,6 +663,36 @@ tMLError MLDLSetOffsetTC(unsigned char const *tc)
         result = MLSLSerialWriteSingle(sMLSLHandle, mldlCfg.addr,
                                        MPUREG_ZG_OFFS_TC, tc[2]);
         ERROR_CHECK(result);
+    } else {
+        mldlCfg.gyro_needs_reset = TRUE;
+    }
+    return ML_SUCCESS;
+}
+
+/**
+ *  @brief  Set the gyro offset.
+ *  @param  offset
+ *              a pointer to the gyro offset for the 3 gyro axes.
+ *  @return ML_SUCCESS if successful, a non-zero error code otherwise.
+ */
+tMLError MLDLSetOffset(unsigned short const *offset)
+{
+    tMLError result;
+    unsigned char regs[7];
+    int ii;
+
+    for (ii = 0; ii < DIM(mldlCfg.offset); ii++){
+        mldlCfg.offset[ii] = offset[ii];
+        regs[1 + ii * 2]     = (unsigned char)(offset[ii] >> 8)& 0xff;
+        regs[1 + ii * 2 + 1] = (unsigned char)(offset[ii] & 0xff);
+    }
+
+    if (!mldlCfg.gyro_is_suspended) {
+        regs[0] = MPUREG_X_OFFS_USRH;
+        result = MLSLSerialWrite(sMLSLHandle, mldlCfg.addr, 7, regs);
+        ERROR_CHECK(result);
+    } else {
+        mldlCfg.gyro_needs_reset = TRUE;
     }
     return ML_SUCCESS;
 }
@@ -574,7 +729,7 @@ MLDLGetMemoryMPUOneBank( unsigned char  bank,
         return ML_ERROR_INVALID_PARAMETER;
     }
 
-    if (mldlCfg.is_suspended) {
+    if (mldlCfg.gyro_is_suspended) {
         memcpy(buffer,&mldlCfg.ram[bank][memAddr],length);
         result = ML_SUCCESS;
     } else {
@@ -609,20 +764,22 @@ tMLError MLDLSetMemoryMPUOneBank( unsigned char bank,
                                   unsigned short length, 
                                   unsigned char const* buffer )
 {
-    tMLError result;
+    tMLError result = ML_SUCCESS;
+    int different;
 
     if ((bank >= MPU_MEM_NUM_RAM_BANKS) || (memAddr >= MPU_MEM_BANK_SIZE) ||
         ((memAddr + length) > MPU_MEM_BANK_SIZE) || (NULL == buffer)) {
         return ML_ERROR_INVALID_PARAMETER;
     }
 
-    if (mldlCfg.is_suspended) {
-        memcpy(&mldlCfg.ram[bank][memAddr],buffer,length);
-        result = ML_SUCCESS;
-    } else {
+    different = memcmp(&mldlCfg.ram[bank][memAddr],buffer,length);
+    memcpy(&mldlCfg.ram[bank][memAddr],buffer,length);
+    if (!mldlCfg.gyro_is_suspended) {
         result = MLSLSerialWriteMem(sMLSLHandle, mldlCfg.addr, 
                                     ((bank << 8) | memAddr),
                                     length, buffer);
+    } else if (different) {
+        mldlCfg.gyro_needs_reset = TRUE;
     }
 
     return result;
@@ -725,15 +882,15 @@ tMLError MLDLSetMemoryMPU( unsigned short key,
         unsigned short sub_length = MPU_MEM_BANK_SIZE - memAddr;
 
         result = MLDLSetMemoryMPUOneBank( bank, memAddr, sub_length, buffer );
-        if (ML_SUCCESS != result)
-            return result;
+        ERROR_CHECK(result);
+
         bank++;
         length  -= sub_length;
         buffer  += sub_length;
         memAddr  = 0;
     }
     result = MLDLSetMemoryMPUOneBank( bank, memAddr, length, buffer );
-
+    ERROR_CHECK(result);
     return result;
 }
 
@@ -789,28 +946,6 @@ unsigned char MLDLGetSiliconRev(void)
 {
     return mldlCfg.silicon_revision;
 }
-
-/**
- *  @brief      Enable/Disable the use MPU's VDDIO level shifters.
- *              When enabled the voltage interface with AUX or other external 
- *              accelerometer is using Vlogic instead of VDD (supply).
- *  
- *  @note       Must be called after MLSerialOpen().
- *  @note       Typically be called before MLDmpOpen().
- *              If called after MLDmpOpen(), must be followed by a call to
- *              MLDLApplyLevelShifterBit() to write the setting on the hw.
- * 
- *  @param[in]  enable
- *                  1 to enable, 0 to disable
- *
- *  @return     ML_SUCCESS if successfull, a non-zero error code otherwise.
-*/
-tMLError MLDLSetLevelShifterBit(unsigned char enable) 
-{
-    mldlCfg.pdata->level_shifter = enable;
-    
-    return ML_SUCCESS;
-} 
 
 /*******************************************************************************
  *******************************************************************************

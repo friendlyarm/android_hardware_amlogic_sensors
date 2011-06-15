@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: gesture.h 3922 2010-10-21 17:58:43Z nroyer $
+ * $Id: gesture.h 4568 2011-01-21 23:20:41Z nroyer $
  *
  ******************************************************************************/
 
@@ -103,21 +103,12 @@ extern "C" {
 #define MLGSTR_SHAKE_THRESHOLD_0_DEFAULT                    (4.0)
 #define MLGSTR_SHAKE_THRESHOLD_1_DEFAULT                    (4.0)
 #define MLGSTR_SHAKE_THRESHOLD_2_DEFAULT                    (4.0)
-#ifdef MPL_HEAVEN
-#define MLGSTR_SNAP_THRESHOLD_0_DEFAULT                     (3.2)
-#define MLGSTR_SNAP_THRESHOLD_1_DEFAULT                     (2.2)
-#define MLGSTR_SNAP_THRESHOLD_2_DEFAULT                     (2.2)
-#define MLGSTR_SHAKE_REJECT_THRESHOLD_0_DEFAULT             (0.8f)
-#define MLGSTR_SHAKE_REJECT_THRESHOLD_1_DEFAULT             (0.8f)
-#define MLGSTR_SHAKE_REJECT_THRESHOLD_2_DEFAULT             (0.8f)
-#else
 #define MLGSTR_SNAP_THRESHOLD_0_DEFAULT                     (1000.0)
 #define MLGSTR_SNAP_THRESHOLD_1_DEFAULT                     (1000.0)
 #define MLGSTR_SNAP_THRESHOLD_2_DEFAULT                     (1000.0)
 #define MLGSTR_SHAKE_REJECT_THRESHOLD_0_DEFAULT             (2.0f)
 #define MLGSTR_SHAKE_REJECT_THRESHOLD_1_DEFAULT             (2.0f)
 #define MLGSTR_SHAKE_REJECT_THRESHOLD_2_DEFAULT             (2.0f)
-#endif
 #define MLGSTR_SHAKE_REJECT_THRESHOLD_3_DEFAULT             (1.500f)
 #define MLGSTR_SHAKE_REJECT_THRESHOLD_4_DEFAULT             (1.501f)
 #define MLGSTR_SHAKE_REJECT_THRESHOLD_5_DEFAULT             (1.502f)
@@ -166,7 +157,7 @@ extern "C" {
         unsigned short nextTapTime;        // The time interval required for the tap number to increase.
         unsigned short maxTaps;            // The max taps to record before reporting and resetting the count
         unsigned int   tapInterpolation;
-
+        unsigned long  tapElements;
         unsigned short shakeMask;          // The shake detection functions.
         unsigned int   shakeMax[3];        // Pitch, Roll, and Yaw axis shake detection maximums
         float          shakeThreshold[3];           // Pitch, Roll, and Yaw axis shake detection thresholds.
@@ -184,7 +175,7 @@ extern "C" {
             tGesture *gesture);            // Gesture data structure.
         void (*gesturePedometerCallback)(  // Pedometer callback function that will be run when a gesture is detected.
             tGesture *gesture);            // Gesture data structure.
-        uint_fast8_t   suspend;              // Used to turn off gesture engine
+        int_fast16_t   suspend;            // Used to turn off gesture engine
 
     }   tMLGstrParams,      // new type definition
         MLGSTR_Params_t;    // backward-compatible definition

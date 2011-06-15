@@ -1,11 +1,13 @@
-/******************************************************************************
- *
- * $Id: driver_selftest.c 4157 2010-11-24 04:29:16Z mcaramello $
- *
- *****************************************************************************/
+/*
+ $License:
+    Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
+ $
+ */
 
 /******************************************************************************
- * Copyright (c) 2010 InvenSense Corporation, All Rights Reserved.
+ *
+ * $Id: driver_selftest.c 5144 2011-04-05 18:09:41Z mcaramello $
+ * 
  *****************************************************************************/
 
 /**
@@ -30,9 +32,8 @@
 #ifdef WIN32
 #include <windows.h>
 #include <conio.h>
+#include "helper.h"  /* for findComm */
 #endif
-
-#include "gopt.h"
 
 #include "mldl.h"
 #include "mpu.h"
@@ -41,9 +42,7 @@
 #include "mlsl.h"
 #include "mlos.h"
 
-#ifdef WIN32
-#include "helper.h"
-#endif
+#include "gopt.h"
 
 /*
     Defines
@@ -53,17 +52,17 @@
 #define WHOAMI_MASK (0x7e)
 
 /* static storage for strings */
-#define N_MSGS 1000
+#define N_MSGS      1000
 #define MAX_MSG_LEN 1024
 
 typedef struct tMsgBufs {
     int num_msgs;
-    char msg[N_MSGS][MAX_MSG_LEN+1];
+    char msg[N_MSGS][MAX_MSG_LEN + 1];
 } tMsgBufs;
 
-char desc_buf  [MAX_MSG_LEN+1];    // test description strin
-char error_buf [MAX_MSG_LEN+1];    // test error message
-tMsgBufs msg_bufs;                 // test additional messages
+char desc_buf  [MAX_MSG_LEN + 1];    // test description strin
+char error_buf [MAX_MSG_LEN + 1];    // test error message
+tMsgBufs msg_bufs;                   // test additional messages
 
 
 /* Global config data */
@@ -85,14 +84,13 @@ int g_accel_burstaddr = 0x06;
 int g_accel_burstlen = 6;
 
 /* utility functions */
-int parse_commandline(int argc, const char** argv);
+int parse_commandline(int argc, const char **argv);
 
 /* test functions */
 typedef struct {
     int res;
     char *desc;
     char *error;
-    //char (*messages)[MAX_MSG_LEN+1];
     tMsgBufs *messages;
 } test_result;
 
@@ -139,7 +137,7 @@ test_func test_funcs[] = {
 
 #define OUTPUT(s,fp)                         \
     fputs(s, fp); fputs("\n", fp);           \
-    puts(s);                                 \
+    puts(s);
 
 #define RESULT_SETUP(str)           \
     test_result r = {               \
@@ -149,11 +147,11 @@ test_func test_funcs[] = {
         /*.messages = */ &msg_bufs  \
     };                              \
     r.messages->num_msgs = 0;       \
-    sprintf(r.desc, "%s", str);     \
+    sprintf(r.desc, "%s", str);
 
 #define RETURN_SUCCESS(r)    \
     r.res = 1;               \
-    return r;                \
+    return r;
 
 #define RECORD_ERROR(result, ...)                       \
     if (result != ML_SUCCESS) {                         \
@@ -161,11 +159,18 @@ test_func test_funcs[] = {
         sprintf(r.error, __VA_ARGS__);                  \
         sprintf(r.error, "%s (ec:%d)", r.error, result);\
         return r;                                       \
-    }                                                   \
+    }
+
+#define RECORD_ERROR_COND(cond, ...)                    \
+    if (cond) {                                         \
+        r.res = 0;                                      \
+        sprintf(r.error, __VA_ARGS__);                  \
+        return r;                                       \
+    }
 
 #define ADD_MESSAGE(...)                                           \
     if(msg_bufs.num_msgs<N_MSGS)                                   \
-        sprintf(msg_bufs.msg[msg_bufs.num_msgs++],__VA_ARGS__);    \
+        sprintf(msg_bufs.msg[msg_bufs.num_msgs++],__VA_ARGS__);
 
 
 /*
@@ -181,7 +186,7 @@ void print_data(unsigned char* data, unsigned short length)
 
     // heading
     sprintf(line, "%s      ", pad);
-    for ( i= 0; i < MIN(WRAP_LIMIT, length); i++) {
+    for (i= 0; i < MIN(WRAP_LIMIT, length); i++) {
         sprintf(line, "%s%2x ", line, i);
     }
     ADD_MESSAGE("%s", line);
@@ -194,14 +199,14 @@ void print_data(unsigned char* data, unsigned short length)
 
     // data
     line[0] = 0;
-    for ( i= 0; i < length; i++) {
+    for (i = 0; i < length; i++) {
         if (i % WRAP_LIMIT == 0) {
-            if (i>0) {
+            if (i > 0) {
                 // end line
                 ADD_MESSAGE("%s", line);
             }
             // start a new line 
-            sprintf(line, "%s%-2x - ", pad, i/WRAP_LIMIT);
+            sprintf(line, "%s%-2x - ", pad, i / WRAP_LIMIT);
         }
         sprintf(line, "%s%02X ", line, data[i]);
     }
@@ -215,11 +220,12 @@ int gpio_set_direction(int pin, int in)
     FILE *fp;
     char set_value[4]; 
     char direction_file[128];
+
     // Assumes that gpio_setup has already been called
     // SET DIRECTION
     // Open the LED's sysfs file in binary for reading and writing, 
     // store file pointer in fp
-    sprintf(direction_file,"/sys/class/gpio/gpio%d/direction",pin);
+    sprintf(direction_file, "/sys/class/gpio/gpio%d/direction", pin);
     if ((fp = fopen(direction_file, "rb+")) == NULL) {
         printf("Cannot open direction file.\n");
         return -1;
@@ -228,26 +234,29 @@ int gpio_set_direction(int pin, int in)
     rewind(fp);
     //Write our value of "in" or "out" to the file
     if (in) {
-        strcpy(set_value,"in");
+        strcpy(set_value, "in");
     } 
     else {
-        strcpy(set_value,"out");
+        strcpy(set_value, "out");
     }
     fwrite(&set_value, sizeof(char), strlen(set_value), fp);
     fclose(fp);
     
-    printf("...direction set to %d\n",in);
+    printf("...direction set to %d\n", in);
     return 0;
 }
 
 int gpio_set_value(int pin, int value)
-{    // SET VALUE
+{   
+    // SET VALUE
     // Open the LED's sysfs file in binary for reading and writing, 
     // store file pointer in fp
+
     FILE *fp;
     char set_value[4]; 
     char value_file[128];
-    sprintf(value_file,"/sys/class/gpio/gpio%d/value",pin);
+
+    sprintf(value_file, "/sys/class/gpio/gpio%d/value", pin);
     if ((fp = fopen(value_file, "rb+")) == NULL) {
         printf("Cannot open value file.\n");
         return -1;
@@ -256,14 +265,14 @@ int gpio_set_value(int pin, int value)
     rewind(fp);
     //Write our value of "1" to the file 
     if (value) {
-        strcpy(set_value,"1");
+        strcpy(set_value, "1");
     } 
     else {
-        strcpy(set_value,"0");
+        strcpy(set_value, "0");
     }
     fwrite(&set_value, sizeof(char), 1, fp);
     fclose(fp);
-    printf("...value set to %d...\n",value);
+    printf("...value set to %d...\n", value);
     return 0;
 }
 
@@ -272,9 +281,6 @@ int gpio_setup(int pin, int in, int value)
     FILE *fp;
     //create a variable to store whether we are sending a '1' or a '0'
     char set_value[4]; 
-       
-    //Integer to keep track of whether we want on or off
-    int toggle = 0;
     
     if (pin > 0xFF) {
         return -2;
@@ -294,14 +300,14 @@ int gpio_setup(int pin, int in, int value)
     //Set pointer to begining of the file
     rewind(fp);
     //Write our value of "37" to the file
-    sprintf(set_value,"%d",(pin&0xff));
+    sprintf(set_value,"%d", pin & 0xff);
     fwrite(&set_value, sizeof(char), strlen(set_value), fp);
     fclose(fp);
     
-    printf("%s...export file accessed, new pin now accessible\n",set_value);
+    printf("%s...export file accessed, new pin now accessible\n", set_value);
     
-    if (gpio_set_direction(pin,in)) return -2;
-    if (gpio_set_value(pin,value)) return -3;
+    if (gpio_set_direction(pin, in)) return -2;
+    if (gpio_set_value(pin, value)) return -3;
 
     return 0;
 }
@@ -330,8 +336,8 @@ void setup_aa(unsigned char* data, int len)
 void setup_aa_55(unsigned char* data, int len) 
 {
     int ii;
-    for (ii = 0; ii+1 < len; ii+=2) {
-        data[ii]   = 0xaa;
+    for (ii = 0; ii + 1 < len; ii += 2) {
+        data[ii] = 0xaa;
         data[ii+1] = 0x55;
     }
 }
@@ -339,7 +345,7 @@ void setup_aa_55(unsigned char* data, int len)
 void setup_counter(unsigned char* data, int len) 
 {
     int i;
-    for(i=0; i < len; i++) {
+    for(i = 0; i < len; i++) {
         data[i] = i & 0xFF;
     }
 }
@@ -348,8 +354,8 @@ void setup_counter(unsigned char* data, int len)
 void setup_random(unsigned char* data, int len) 
 {
     int i;
-    for(i=0; i < len; i++) {
-        data[i] = 1 + rand() & (0xFF-2);
+    for(i = 0; i < len; i++) {
+        data[i] = (1 + rand()) & (0xFF - 2);
     }
 }
 
@@ -366,86 +372,84 @@ void error_pattern(unsigned char* data, int len)
 
 int parse_commandline(int argc, const char** argv) 
 {
-    int result;
-
 #if !defined(WIN32)
     const char *val;
-    const void *options= gopt_sort( 
+    const void *options = gopt_sort( 
        &argc, argv, 
        gopt_start(
-           gopt_option( 'h', 0, gopt_shorts( 'h', '?' ), 
-                                gopt_longs( "help", "HELP" )),
-           gopt_option( 'v', 0, gopt_shorts( 'v' ), 
-                                gopt_longs( "verbose", "VERBOSE" )),
-           gopt_option( 'f', 0, gopt_shorts( 'f' ), 
-                                gopt_longs( "fail", "FAIL" )),
-           gopt_option( 'c', 0, gopt_shorts( 'c' ), 
-                                gopt_longs( "continuous", "CONTINUOUS" )),
-           gopt_option( 'p', GOPT_ARG, gopt_shorts( 'p' ), 
-                                       gopt_longs( "port" )),
-           gopt_option( 'm', GOPT_ARG, gopt_shorts( 'm' ), 
-                                       gopt_longs( "mpuslaveaddr" )),
-           gopt_option( 'a', GOPT_ARG, gopt_shorts( 'a' ), 
-                                       gopt_longs( "accelslaveaddr" )),
-           gopt_option( 'd', GOPT_ARG, gopt_shorts( 'd' ), 
-                                       gopt_longs( "accelburstaddr" )),
-           gopt_option( 'l', GOPT_ARG, gopt_shorts( 'l' ), 
-                                       gopt_longs( "accelburstlen" )),
-           gopt_option( 'w', GOPT_ARG, gopt_shorts( 'w' ), 
-                                       gopt_longs( "whoami" ))
+           gopt_option('h', 0, gopt_shorts('h', '?'), 
+                                gopt_longs("help", "HELP")),
+           gopt_option('v', 0, gopt_shorts('v' ), 
+                                gopt_longs("verbose", "VERBOSE")),
+           gopt_option('f', 0, gopt_shorts('f'), 
+                                gopt_longs("fail", "FAIL")),
+           gopt_option('c', 0, gopt_shorts('c'), 
+                                gopt_longs("continuous", "CONTINUOUS")),
+           gopt_option('p', GOPT_ARG, gopt_shorts('p'), 
+                                       gopt_longs("port")),
+           gopt_option('m', GOPT_ARG, gopt_shorts('m'), 
+                                       gopt_longs("mpuslaveaddr")),
+           gopt_option('a', GOPT_ARG, gopt_shorts('a'), 
+                                       gopt_longs("accelslaveaddr")),
+           gopt_option('d', GOPT_ARG, gopt_shorts('d'), 
+                                       gopt_longs("accelburstaddr")),
+           gopt_option('l', GOPT_ARG, gopt_shorts('l'), 
+                                       gopt_longs("accelburstlen")),
+           gopt_option('w', GOPT_ARG, gopt_shorts('w'), 
+                                       gopt_longs("whoami"))
        )
     );
 
-    if( gopt( options, 'h' ) ){
+    if(gopt( options, 'h')) {
       /*
        * if any of the help options was specified
        */
-      fprintf( stdout, "MLSL Serial Driver Self Test\n" );
-      fprintf( stdout, "usage: %s "
+      fprintf(stdout, "MLSL Serial Driver Self Test\n");
+      fprintf(stdout, "usage: %s "
                        "[-h] [-v] [-f] [-c] "
                        "[-p port/device_driver] "
                        "[-m addr] [-a addr] [-d reg] [-l len] [-w val] \n", 
                        argv[0]);
-      fprintf( stdout, "\noptions:\n");
-      fprintf( stdout, "\t-p\tport / device driver\n");
-      fprintf( stdout, "\t-h\tprint help message\n");
-      fprintf( stdout, "\t-v\tuse verbose output\n"); 
-      fprintf( stdout, "\t-f\tabort on failed test\n"); 
-      fprintf( stdout, "\t-c\trun continuosly, terminate with <CTRL+C>\n");
-      fprintf( stdout, "\t-m\tmpu slave address\n");
-      fprintf( stdout, "\t-w\texpected value of mpu whoami register\n");
-      fprintf( stdout, "\t-a\taccel slave address\n");
-      fprintf( stdout, "\t-d\tfirst data register on accelerometer\n");
-      fprintf( stdout, "\t-l\tnumber of accelerometer data registers\n");
-      exit( 0 );
+      fprintf(stdout, "\noptions:\n");
+      fprintf(stdout, "\t-p\tport / device driver\n");
+      fprintf(stdout, "\t-h\tprint help message\n");
+      fprintf(stdout, "\t-v\tuse verbose output\n"); 
+      fprintf(stdout, "\t-f\tabort on failed test\n"); 
+      fprintf(stdout, "\t-c\trun continuosly, terminate with <CTRL+C>\n");
+      fprintf(stdout, "\t-m\tmpu slave address\n");
+      fprintf(stdout, "\t-w\texpected value of mpu whoami register\n");
+      fprintf(stdout, "\t-a\taccel slave address\n");
+      fprintf(stdout, "\t-d\tfirst data register on accelerometer\n");
+      fprintf(stdout, "\t-l\tnumber of accelerometer data registers\n");
+      exit(0);
     }
-    if( gopt( options, 'v' ) ) {
+    if(gopt(options, 'v')) {
         g_verbose = TRUE;
         fprintf(stdout, "Using 'verbose' output\n");
     }
-    if( gopt( options, 'f' ) ) {
+    if(gopt(options, 'f')) {
         g_fail_on_error = TRUE;
         fprintf(stdout, "Using 'fail' on error\n");
     }
-    if( gopt( options, 'c' ) ) {
+    if(gopt(options, 'c')) {
         g_continuous_run = TRUE;
         fprintf(stdout, "Using 'continuous' run. Use <CTRL+C> to terminate.\n");
     }
-    if( gopt_arg( options, 'p', &val ) ) { sscanf(val,"%s",&g_port);}
-    if( gopt_arg( options, 'm', &val ) ) { sscanf(val,"%x",&g_mpu_slaveaddr);}
-    if( gopt_arg( options, 'a', &val ) ) { sscanf(val,"%x",&g_accel_slaveaddr);}
-    if( gopt_arg( options, 'w', &val ) ) { sscanf(val,"%x",&g_whoami);}
-    if( gopt_arg( options, 'd', &val ) ) { sscanf(val,"%x",&g_accel_burstaddr);}
-    if( gopt_arg( options, 'l', &val ) ) { sscanf(val,"%x",&g_accel_burstlen);}
+    if(gopt_arg(options, 'p', &val)) { sscanf(val,"%s",g_port); }
+    if(gopt_arg(options, 'm', &val)) { sscanf(val,"%x",&g_mpu_slaveaddr); }
+    if(gopt_arg(options, 'a', &val)) { sscanf(val,"%x",&g_accel_slaveaddr); }
+    if(gopt_arg(options, 'w', &val)) { sscanf(val,"%x",&g_whoami); }
+    if(gopt_arg(options, 'd', &val)) { sscanf(val,"%x",&g_accel_burstaddr); }
+    if(gopt_arg(options, 'l', &val)) { sscanf(val,"%x",&g_accel_burstlen); }
 #else
-    if (argc>=2) {
+    if (argc >= 2) {
         strcpy(g_port, argv[1]);
     }
     else {
-        result = findComm(g_port, sizeof(g_port));
-        return result == ML_SUCCESS;
+        return findComm(g_port, sizeof(g_port));
     }
 #endif
+
     return 1;
 }
 
@@ -515,7 +519,6 @@ test_result test_close(void)
 
     res = MLSLSerialClose(mlsl_handle);
 
-
 done:
     RECORD_ERROR(res, "serial close failed");
     RETURN_SUCCESS(r);
@@ -525,7 +528,6 @@ test_result test_single_read(void)
 {
     unsigned short res;
     unsigned char data;
-
 
     RESULT_SETUP("Single byte read");
 
@@ -558,7 +560,7 @@ test_result test_register_dump(void)
 
     RESULT_SETUP("Register dump");
 
-    for(ii=0; ii<NUM_OF_MPU_REGISTERS; ii++) {
+    for(ii = 0; ii < NUM_OF_MPU_REGISTERS; ii++) {
         if (ii == MPUREG_FIFO_R_W || ii == MPUREG_MEM_R_W) {
             data = 0x00;
         }
@@ -574,7 +576,7 @@ test_result test_register_dump(void)
     }
 
     print_data(usrCfgRegs, NUM_OF_MPU_REGISTERS);
-    ADD_MESSAGE("");
+    ADD_MESSAGE(" ");
 
     RECORD_ERROR(error, "register dump failed (too many I2C NACKs)");
     RECORD_ERROR(res,   "register dump failed");
@@ -596,8 +598,8 @@ test_result test_burst_read(void)
                          MPUREG_GYRO_XOUT_H, 6, data);
     RECORD_ERROR(res, "serial burst read failed - serial communication");
 
-    for(i=0; i<5; i++) {
-        if(data[i] == data[i+1] ) {
+    for(i = 0; i < 5; i++) {
+        if(data[i] == data[i + 1] ) {
             res = 1;
             break;
         }
@@ -644,9 +646,10 @@ test_result test_single_write(void)
     CHECK_RES;
 
     //expected value is not 0xff as some bits reset automatically
-    RECORD_ERROR(usr_ctrl_after != (data&0xF0), 
-                 "serial write failed : USER_CTRL reg is 0x%02X (exp:0x%02X)", 
-                 usr_ctrl_after, data&0xF0
+    RECORD_ERROR_COND(
+        usr_ctrl_after != (data & 0xF0), 
+        "serial write failed : USER_CTRL reg is 0x%02X (exp:0x%02X)", 
+        usr_ctrl_after, data & 0xF0
     );
 
 
@@ -658,7 +661,7 @@ test_result test_single_write(void)
                          MPUREG_USER_CTRL, 1, &data);
     CHECK_RES;
 
-    RECORD_ERROR(
+    RECORD_ERROR_COND(
         usr_ctrl_before!=data, 
         "single write failed - USR_CTRL reg is 0x%02X (exp:0x%02X)",
         data, usr_ctrl_before
@@ -680,8 +683,8 @@ test_result test_burst_write(void)
     RESULT_SETUP("Multi byte write");
 
     data[0] = MPUREG_X_OFFS_USRH;
-    for(i=0; i<6; i++) {
-        data[i+1] = i;
+    for(i = 0; i < 6; i++) {
+        data[i + 1] = i;
     }
     res = MLSLSerialWrite(mlsl_handle, g_mpu_slaveaddr, 
                           7, data);
@@ -691,8 +694,8 @@ test_result test_burst_write(void)
     CHECK_RES;
 
     res = 0;
-    for(i=0; i<6; i++) {
-        if(write_data[i]!=read_data[i]) {
+    for(i = 0; i < 6; i++) {
+        if(write_data[i] != read_data[i]) {
             res++;
         }
     }
@@ -724,10 +727,11 @@ test_result test_single_wr(void)
     res = MLSLSerialRead(mlsl_handle, g_mpu_slaveaddr, 
                          MPUREG_AUX_SLV_ADDR, 1, &read_val);
 
-    RECORD_ERROR(read_val != write_val, 
-                 "serial write failed : "
-                 "AUX_SLV_ADDR reg is 0x%02X (exp:0x%02X)", 
-                 read_val, write_val
+    RECORD_ERROR_COND(
+        read_val != write_val, 
+        "serial write failed : "
+        "AUX_SLV_ADDR reg is 0x%02X (exp:0x%02X)", 
+        read_val, write_val
     );
     // restore reg value
     res = MLSLSerialWriteSingle(mlsl_handle, g_mpu_slaveaddr, 
@@ -741,10 +745,10 @@ done:
 
 
 #define REG_BURST_START MPUREG_PRODUCT_ID
-#define REG_BURST_LEN   20
+#define REG_BURST_LEN 20
 test_result test_burst_wr(void)
 {
-    unsigned char i2c_write[1+REG_BURST_LEN];
+    unsigned char i2c_write[1 + REG_BURST_LEN];
     unsigned char *write_data = &i2c_write[1];
     unsigned char read_data[REG_BURST_LEN];
     unsigned short thisLen;
@@ -770,15 +774,15 @@ test_result test_burst_wr(void)
             ADD_MESSAGE("using length %d", thisLen);
         }
         res = MLSLSerialWrite(mlsl_handle, g_mpu_slaveaddr, 
-                              1+thisLen, i2c_write);
+                              1 + thisLen, i2c_write);
         CHECK_RES;
         res = MLSLSerialRead(mlsl_handle, g_mpu_slaveaddr, 
                              REG_BURST_START, 
                              thisLen, read_data);
         CHECK_RES;
         // error checking
-        for(i=0, fail=0; i<thisLen; i++) {
-            if(write_data[i]!=read_data[i]) {
+        for(i = 0, fail = 0; i < thisLen; i++) {
+            if(write_data[i] != read_data[i]) {
                 fail++;
             }
         }
@@ -818,7 +822,7 @@ test_result test_fill_ram_in_chunks(void)
     unsigned char write_data[MPU_MEM_BANK_SIZE], read_data[MPU_MEM_BANK_SIZE];
     unsigned short res;
     const unsigned char bank = MPU_MEM_RAM_BANK_1;
-    unsigned short chunk_size = MPU_MEM_BANK_SIZE*2; // will be divided by 2
+    unsigned short chunk_size = MPU_MEM_BANK_SIZE * 2; // will be divided by 2
     int fail = TRUE;
     int i;
 
@@ -830,18 +834,18 @@ test_result test_fill_ram_in_chunks(void)
     while(fail) {
         unsigned rem = MPU_MEM_BANK_SIZE;
 
-        chunk_size/=2;
+        chunk_size /= 2;
         while(rem) {
             const unsigned char memStart = MPU_MEM_BANK_SIZE-rem; 
             //write to memory area
             res = MLSLSerialWriteMem(mlsl_handle, g_mpu_slaveaddr,
-                                     bank<<8|memStart, 
+                                     bank << 8 | memStart, 
                                      chunk_size, &write_data[memStart]);
             CHECK_RES;
 
             //read back
             res = MLSLSerialReadMem(mlsl_handle, g_mpu_slaveaddr,
-                                    bank<<8|memStart, 
+                                    bank << 8 | memStart, 
                                     chunk_size, &read_data[memStart]);
             CHECK_RES;
             rem -= chunk_size;
@@ -855,8 +859,8 @@ test_result test_fill_ram_in_chunks(void)
         }
 
         fail = FALSE;
-        for (i=0; i<MPU_MEM_BANK_SIZE; i++) {
-            if (write_data[i]!=read_data[i]) {
+        for (i = 0; i < MPU_MEM_BANK_SIZE; i++) {
+            if (write_data[i] != read_data[i]) {
                 fail = TRUE;
             }
         }
@@ -884,23 +888,23 @@ test_result test_fill_ram(void)
         setup_aa_55,
         setup_counter 
     };
-    const int num_data_sets = sizeof(fill_data)/sizeof(data_setup_func);
+    const int num_data_sets = sizeof(fill_data) / sizeof(data_setup_func);
     int i, j;
 
     RESULT_SETUP("Fill RAM area");
 
-    for(i=0; i<num_data_sets; i++) {
+    for(i = 0; i < num_data_sets; i++) {
         fill_data[i](write_data, FILL_RAM_SIZE);
         error_pattern(read_data, FILL_RAM_SIZE);
 
         //write to memory area
         res = MLSLSerialWriteMem(mlsl_handle, g_mpu_slaveaddr,
-                                 bank<<8|0x00, FILL_RAM_SIZE, write_data);
+                                 bank << 8 | 0x00, FILL_RAM_SIZE, write_data);
         CHECK_RES;
 
         //read back
         res = MLSLSerialReadMem(mlsl_handle, g_mpu_slaveaddr,
-                                bank<<8|0x00, FILL_RAM_SIZE, read_data);
+                                bank << 8 | 0x00, FILL_RAM_SIZE, read_data);
         CHECK_RES;
 
         if (g_verbose) {
@@ -908,11 +912,11 @@ test_result test_fill_ram(void)
             print_data(write_data, FILL_RAM_SIZE);
             ADD_MESSAGE("Read data");            
             print_data(read_data, FILL_RAM_SIZE);
-            ADD_MESSAGE("");            
+            ADD_MESSAGE(" ");            
         }
 
         //check
-        for(j=0; j<FILL_RAM_SIZE; j++){
+        for(j = 0; j < FILL_RAM_SIZE; j++){
             if(write_data[j] != read_data[j]) {
                 if (g_verbose) {
                     ADD_MESSAGE("RAM area fill mismatch : %02X -> %02X != %02X", 
@@ -921,13 +925,15 @@ test_result test_fill_ram(void)
                 fail++;
             }
         }
-        RECORD_ERROR(fail>0, "RAM area fill failed - "
-                             "memory write and read mismatch in %d locations", 
-                             fail);
+        RECORD_ERROR_COND(
+            fail > 0,
+            "RAM area fill failed - "
+            "memory write and read mismatch in %d locations", 
+            fail);
     }
 
 done:
-    RECORD_ERROR(res,  "RAM area fill failed - serial communication");
+    RECORD_ERROR(res, "RAM area fill failed - serial communication");
     RETURN_SUCCESS(r);
 }
 
@@ -955,38 +961,37 @@ test_result test_fill_fifo(void)
     if (g_verbose) {
         ADD_MESSAGE("Written data");
         print_data(write_data, FILL_FIFO_SIZE);
-        ADD_MESSAGE("");
+        ADD_MESSAGE(" ");
     }
 
     res = MLSLSerialRead(mlsl_handle, g_mpu_slaveaddr, 
-                            MPUREG_USER_CTRL, 1, &usr_ctrl);
+                         MPUREG_USER_CTRL, 1, &usr_ctrl);
     CHECK_RES;
 
     // fifo reset
-    while ( len > 0  && tries++ < 6) {
+    while (len > 0  && tries++ < 6) {
         res = MLSLSerialWriteSingle(mlsl_handle, g_mpu_slaveaddr, 
                                     MPUREG_USER_CTRL, 
-                                    usr_ctrl & (~BIT_FIFO_EN) | BIT_FIFO_RST); 
+                                    (usr_ctrl & (~BIT_FIFO_EN)) | BIT_FIFO_RST); 
         CHECK_RES;
         MLOSSleep(5);
         res = MLSLSerialRead(mlsl_handle, g_mpu_slaveaddr,
                              MPUREG_FIFO_COUNTH, 2, read_data);
         CHECK_RES;
         len = read_data[0] << 8 | read_data[1];
-            
     }
-    RECORD_ERROR(tries>=6, "FIFO reset failed - length is %d", len);
+    RECORD_ERROR_COND(tries >= 6, "FIFO reset failed - length is %d", len);
 
     //set up write to FIFO
     res = MLSLSerialWriteSingle(mlsl_handle, g_mpu_slaveaddr, 
                                 MPUREG_USER_CTRL, 
-                                usr_ctrl | (BIT_FIFO_EN|BIT_FIFO_RST));
+                                usr_ctrl | (BIT_FIFO_EN | BIT_FIFO_RST));
     CHECK_RES;
     MLOSSleep(5);
 
     // write the fifo, FIFO_RW_CHUNK_SIZE bytes at a time
     len = 0;
-    while ( len < FILL_FIFO_SIZE ) {
+    while (len < FILL_FIFO_SIZE) {
         res = MLSLSerialWriteFifo(mlsl_handle, g_mpu_slaveaddr, 
                                   FIFO_RW_CHUNK_SIZE, &write_data[len]);
         CHECK_RES;        
@@ -995,7 +1000,7 @@ test_result test_fill_fifo(void)
 
     // read the fifo content, FIFO_RW_CHUNK_SIZE bytes at a time
     len = 0;
-    while ( len < FILL_FIFO_SIZE ) {
+    while (len < FILL_FIFO_SIZE) {
         res = MLSLSerialReadFifo(mlsl_handle, g_mpu_slaveaddr, 
                                  FIFO_RW_CHUNK_SIZE, &read_data[len]);
         CHECK_RES;        
@@ -1008,7 +1013,7 @@ test_result test_fill_fifo(void)
     CHECK_RES;
 
     // compare
-    for(j=0; j<FILL_FIFO_SIZE; j++) {
+    for(j = 0; j < FILL_FIFO_SIZE; j++) {
         mismatches += (write_data[j] != read_data[j]);
     }
     if (mismatches) {
@@ -1020,7 +1025,7 @@ test_result test_fill_fifo(void)
 
             ADD_MESSAGE("\nMismatching bytes (%d):\n", mismatches);
             ADD_MESSAGE("\tloc. -> Wrote Read Bytes\n"); 
-            for(j=0; j<FILL_FIFO_SIZE; j++) {
+            for(j = 0; j < FILL_FIFO_SIZE; j++) {
                 if (write_data[j] != read_data[j]) {
                     ADD_MESSAGE("\t%4d    0x%02X  0x%02X", 
                                 j, write_data[j], read_data[j]);
@@ -1037,7 +1042,7 @@ done:
     RETURN_SUCCESS(r);
 }
 
-#define CHECK_RES_CONT if(res!=ML_SUCCESS) {fail=TRUE; continue;}
+#define CHECK_RES_CONT if(res != ML_SUCCESS) {fail = TRUE; continue;}
 
 test_result test_bypass(void) 
 {
@@ -1052,17 +1057,17 @@ test_result test_bypass(void)
 
     RESULT_SETUP("Check bypass function"); r.res = 0;
 
-    for(i=0; i<2; i++) {
-        fail=0;
-        if(i==0) {  // VDDIO level shifter off
+    for(i = 0; i < 2; i++) {
+        fail = 0;
+        if(i == 0) {  // VDDIO level shifter off
             res = MLSLSerialWriteSingle(
                     mlsl_handle, g_mpu_slaveaddr, 
                     MPUREG_ACCEL_BURST_ADDR, g_accel_burstaddr ); 
             CHECK_RES_CONT;
-        } else {    // VDDIO level shifter on
+        } else {     // VDDIO level shifter on
             res = MLSLSerialWriteSingle(
                     mlsl_handle, g_mpu_slaveaddr, 
-                    MPUREG_ACCEL_BURST_ADDR, 0x80|g_accel_burstaddr ); 
+                    MPUREG_ACCEL_BURST_ADDR, 0x80 | g_accel_burstaddr ); 
             CHECK_RES_CONT;
         }
 
@@ -1075,7 +1080,7 @@ test_result test_bypass(void)
                                     MPUREG_USER_CTRL, usr_ctrl); 
         CHECK_RES_CONT;
 
-        if(g_accel_slaveaddr==0x0f) {  // Kionix accel
+        if(g_accel_slaveaddr == 0x0f) {  // Kionix accel
             res = MLSLSerialRead(mlsl_handle, g_accel_slaveaddr, 
                                  0x0f, 1, &data); 
             CHECK_RES_CONT;
@@ -1094,16 +1099,16 @@ test_result test_bypass(void)
                 "VDDIO %3s - reg 0x00 : 0x%02X, accel[%02X:%02X] : "
                 "0x%02X 0x%02x 0x%02X 0x%02x 0x%02X 0x%02x", 
                 i==0?"OFF":"ON", data, 
-                g_accel_burstaddr, g_accel_burstaddr+g_accel_burstlen,
+                g_accel_burstaddr, g_accel_burstaddr + g_accel_burstlen,
                 sensors[0], sensors[1], sensors[2], 
                 sensors[3], sensors[4], sensors[5]
             );
         }
 
-        if(i==0 && !fail) {
+        if(i == 0 && !fail) {
             bit_low_works = TRUE;
         }
-        if(i==1 && !fail){
+        if(i == 1 && !fail){
             bit_high_works = TRUE;
         }
     }
@@ -1115,8 +1120,8 @@ test_result test_bypass(void)
     // NOTE : never reset MPU or secondary i2c while secondary i2c is enabled.
 
     RECORD_ERROR(fail, "Bypass mode check failed - serial communication");
-    RECORD_ERROR(bit_low_works==0 && bit_high_works==0, 
-                 "Bypass mode check failed - neither VDDIO level works");
+    RECORD_ERROR_COND(bit_low_works == 0 && bit_high_works == 0, 
+                      "Bypass mode check failed - neither VDDIO level works");
 
     if(bit_low_works) {
         ADD_MESSAGE("level shift bit low works");
@@ -1140,7 +1145,6 @@ test_result test_gyro_sanity (void)
 {
     unsigned char sensors[3][6];
     unsigned short res;
-    int fail = 0;
     int i;
     int v1, v2, v3;
 
@@ -1154,7 +1158,7 @@ test_result test_gyro_sanity (void)
     }
 
     if (g_verbose) {
-        for(i=0; i< 3; i++) {
+        for(i = 0; i < 3; i++) {
             ADD_MESSAGE(
                 "sensors[%d] : 0x%02X 0x%02x 0x%02X 0x%02x 0x%02X 0x%02x", i, 
                 sensors[i][0], sensors[i][1], sensors[i][2], 
@@ -1163,10 +1167,10 @@ test_result test_gyro_sanity (void)
         }
     }
 
-    for(i=0; i<3; i++) {
-        v1 = sensors[0][i]*256 + sensors[0][i+1];
-        v2 = sensors[1][i]*256 + sensors[1][i+1];
-        v3 = sensors[2][i]*256 + sensors[2][i+1];
+    for(i = 0; i < 3; i++) {
+        v1 = sensors[0][i] * 256 + sensors[0][i + 1];
+        v2 = sensors[1][i] * 256 + sensors[1][i + 1];
+        v3 = sensors[2][i] * 256 + sensors[2][i + 1];
 
         if(v1 == v2 && v2 == v3) {
             RECORD_ERROR(1, "Gyro data sanity check failed - data unchanged");
@@ -1243,7 +1247,7 @@ int main(int argc, const char *argv[])
 
     while (more) {
         // loop over the array of tests, and run each one
-        for(i=0; i < sizeof(test_funcs)/sizeof(test_func); i++) {
+        for(i = 0; i < sizeof(test_funcs) / sizeof(test_func); i++) {
             r = test_funcs[i]();
             OUTPUT(r.desc, fp);
             for(j=0; j<r.messages->num_msgs; j++) {
@@ -1258,9 +1262,9 @@ int main(int argc, const char *argv[])
                 OUTPUT(outstr, fp);
 
 #ifdef LINUX_GPIO
-                gpio_set_value(1,1);
+                gpio_set_value(1, 1);
                 MLOSSleep(1);
-                gpio_set_value(1,0);
+                gpio_set_value(1, 0);
 #endif
                 if (g_fail_on_error)
                     goto end;
@@ -1282,6 +1286,8 @@ end:
     printf("\nPress any key to exit... ");
     getchar();
 #endif
+
+    return 0;
 }
 
 

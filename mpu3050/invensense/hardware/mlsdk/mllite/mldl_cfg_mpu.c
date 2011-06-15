@@ -3,16 +3,18 @@
     Copyright (C) 2010 InvenSense Corporation, All Rights Reserved.
  $
  */
-/*******************************************************************************
+
+/******************************************************************************
  *
- * $Id: mldl_cfg_mpu.c 4108 2010-11-20 01:34:54Z nroyer $
+ * $Id: mldl_cfg_mpu.c 5144 2011-04-05 18:09:41Z mcaramello $
  *
- ******************************************************************************/
+ *****************************************************************************/
 
 /** 
  *  @addtogroup MLDL
+ *
  *  @{
- *      @file   mldl_cfg_mpu3050.c
+ *      @file   mldl_cfg_mpu.c
  *      @brief  The Motion Library Driver Layer.
  */
 
@@ -24,6 +26,14 @@
 #include "mldl_cfg.h"
 #include "mlsl.h"
 #include "mpu.h"
+
+#ifdef LINUX
+#include <sys/ioctl.h>
+#endif
+
+#include "log.h"
+#undef MPL_LOG_TAG
+#define MPL_LOG_TAG "MPL-mldl_cfg_mpu:"
 
 /* --------------------- */
 /* -    Variables.     - */
@@ -38,6 +48,7 @@ void mpu_print_cfg(struct mldl_cfg * mldl_cfg)
     struct mpu3050_platform_data   *pdata   = mldl_cfg->pdata;
     struct ext_slave_platform_data *accel   = &mldl_cfg->pdata->accel;
     struct ext_slave_platform_data *compass = &mldl_cfg->pdata->compass;
+    struct ext_slave_platform_data *pressure = &mldl_cfg->pdata->pressure;
 
     MPL_LOGD("mldl_cfg.addr             = %02x\n", mldl_cfg->addr);
     MPL_LOGD("mldl_cfg.int_config       = %02x\n", mldl_cfg->int_config);
@@ -65,8 +76,8 @@ void mpu_print_cfg(struct mldl_cfg * mldl_cfg)
         MPL_LOGD("slave_accel->reg          = %02x\n", mldl_cfg->accel->reg);
         MPL_LOGD("slave_accel->len          = %02x\n", mldl_cfg->accel->len);
         MPL_LOGD("slave_accel->endian       = %02x\n", mldl_cfg->accel->endian);
-        MPL_LOGD("slave_accel->range.mantissa= %02x\n", mldl_cfg->accel->range.mantissa);
-        MPL_LOGD("slave_accel->range.fraction= %02x\n", mldl_cfg->accel->range.fraction);
+        MPL_LOGD("slave_accel->range.mantissa= %02x\n", (int)mldl_cfg->accel->range.mantissa);
+        MPL_LOGD("slave_accel->range.fraction= %02x\n", (int)mldl_cfg->accel->range.fraction);
     } else {
         MPL_LOGD("slave_accel               = NULL\n");
     }
@@ -79,12 +90,26 @@ void mpu_print_cfg(struct mldl_cfg * mldl_cfg)
         MPL_LOGD("slave_compass->reg        = %02x\n", mldl_cfg->compass->reg);
         MPL_LOGD("slave_compass->len        = %02x\n", mldl_cfg->compass->len);
         MPL_LOGD("slave_compass->endian     = %02x\n", mldl_cfg->compass->endian);
-        MPL_LOGD("slave_compass->range.mantissa= %02x\n", mldl_cfg->compass->range.mantissa);
-        MPL_LOGD("slave_compass->range.fraction= %02x\n", mldl_cfg->compass->range.fraction);
-
+        MPL_LOGD("slave_compass->range.mantissa= %02x\n", (int)mldl_cfg->compass->range.mantissa);
+        MPL_LOGD("slave_compass->range.fraction= %02x\n", (int)mldl_cfg->compass->range.fraction);
     } else {
         MPL_LOGD("slave_compass             = NULL\n");
     }
+
+    if (mldl_cfg->pressure) {
+        MPL_LOGD("slave_pressure->suspend    = %02x\n", (int)mldl_cfg->pressure->suspend);
+        MPL_LOGD("slave_pressure->resume     = %02x\n", (int)mldl_cfg->pressure->resume);
+        MPL_LOGD("slave_pressure->read       = %02x\n", (int)mldl_cfg->pressure->read);
+        MPL_LOGD("slave_pressure->type       = %02x\n", mldl_cfg->pressure->type);
+        MPL_LOGD("slave_pressure->reg        = %02x\n", mldl_cfg->pressure->reg);
+        MPL_LOGD("slave_pressure->len        = %02x\n", mldl_cfg->pressure->len);
+        MPL_LOGD("slave_pressure->endian     = %02x\n", mldl_cfg->pressure->endian);
+        MPL_LOGD("slave_pressure->range.mantissa= %02x\n", (int)mldl_cfg->pressure->range.mantissa);
+        MPL_LOGD("slave_pressure->range.fraction= %02x\n", (int)mldl_cfg->pressure->range.fraction);
+    } else {
+        MPL_LOGD("slave_pressure             = NULL\n");
+    }
+
     MPL_LOGD("accel->get_slave_descr    = %x\n",(unsigned int) accel->get_slave_descr);
     MPL_LOGD("accel->adapt_num          = %02x\n", accel->adapt_num);
     MPL_LOGD("accel->bus                = %02x\n", accel->bus);
@@ -107,6 +132,17 @@ void mpu_print_cfg(struct mldl_cfg * mldl_cfg)
              compass->orientation[0],compass->orientation[1],compass->orientation[2],
              compass->orientation[3],compass->orientation[4],compass->orientation[5],
              compass->orientation[6],compass->orientation[7],compass->orientation[8]);
+    MPL_LOGD("pressure->get_slave_descr  = %x\n",(unsigned int) pressure->get_slave_descr);
+    MPL_LOGD("pressure->adapt_num        = %02x\n", pressure->adapt_num);
+    MPL_LOGD("pressure->bus              = %02x\n", pressure->bus);
+    MPL_LOGD("pressure->address          = %02x\n", pressure->address);
+    MPL_LOGD("pressure->orientation      = \n"
+             "                            %2d %2d %2d\n"
+             "                            %2d %2d %2d\n"
+             "                            %2d %2d %2d\n",
+             pressure->orientation[0],pressure->orientation[1],pressure->orientation[2],
+             pressure->orientation[3],pressure->orientation[4],pressure->orientation[5],
+             pressure->orientation[6],pressure->orientation[7],pressure->orientation[8]);
     
     MPL_LOGD("pdata->int_config         = %02x\n", pdata->int_config);
     MPL_LOGD("pdata->level_shifter      = %02x\n", pdata->level_shifter);
@@ -125,11 +161,11 @@ void mpu_print_cfg(struct mldl_cfg * mldl_cfg)
              offsetof(struct mldl_cfg, ram));
 }
 
-/*******************************************************************************
- *******************************************************************************
+/******************************************************************************
+ ******************************************************************************
  * Exported functions
- *******************************************************************************
- ******************************************************************************/
+ ******************************************************************************
+ *****************************************************************************/
 
 /** 
  * Initializes the pdata structure to defaults.
@@ -137,22 +173,51 @@ void mpu_print_cfg(struct mldl_cfg * mldl_cfg)
  * Opens the device to read silicon revision, product id and whoami.  Leaves
  * the device in suspended state for low power.
  * 
- * @param pdata 
- * @param mlsl_handle 
+ * @param mldl_cfg handle to the config structure
+ * @param mlsl_handle handle to the mpu serial layer
+ * @param accel_handle handle to the accel serial layer
+ * @param compass_handle handle to the compass serial layer
+ * @param pressure_handle handle to the pressure serial layer
  *
  * @return ML_SUCCESS if silicon revision, product id and woami are supported
  *         by this software.
  */
-int mpu3050_open(struct mldl_cfg *mldl_cfg, void *mlsl_handle)
+int mpu3050_open(struct mldl_cfg *mldl_cfg, 
+                 void *mlsl_handle,
+                 void *accel_handle,
+                 void *compass_handle,
+                 void *pressure_handle)
 {
     int result;
     result = ioctl((int)mlsl_handle, MPU_GET_MPU_CONFIG, mldl_cfg);
 
-    if (ML_SUCCESS == result && !mldl_cfg->is_suspended) {
-        result = mpu3050_suspend(mldl_cfg, mlsl_handle, NULL, NULL,
-                                 mldl_cfg->pdata->accel.get_slave_descr != 0,
-                                 mldl_cfg->pdata->compass.get_slave_descr != 0);
-    }
+    result = mpu3050_suspend(mldl_cfg, mlsl_handle, NULL, NULL, NULL,
+                             TRUE, TRUE, TRUE, TRUE);
+    ERROR_CHECK(result);
+    return result;
+}
+
+/** 
+ * Stub for driver close.  Just verify that the devices are suspended
+ * 
+ * @param mldl_cfg handle to the config structure
+ * @param mlsl_handle handle to the mpu serial layer
+ * @param accel_handle handle to the accel serial layer
+ * @param compass_handle handle to the compass serial layer
+ * @param pressure_handle handle to the compass serial layer
+ * 
+ * @return ML_SUCCESS or non-zero error code
+ */
+int mpu3050_close(struct mldl_cfg *mldl_cfg, 
+		  void *mlsl_handle,
+		  void *accel_handle,
+		  void *compass_handle,
+		  void *pressure_handle)
+{
+    int result = ML_SUCCESS;
+
+    result = mpu3050_suspend(mldl_cfg, mlsl_handle, NULL, NULL, NULL,
+                             TRUE, TRUE, TRUE, TRUE);
     return result;
 }
 
@@ -160,42 +225,66 @@ int mpu3050_resume(struct mldl_cfg* mldl_cfg,
                    void *mlsl_handle, 
                    void *accel_handle, 
                    void *compass_handle, 
-                   bool resume_accel, bool resume_compass)
+                   void *pressure_handle, 
+                   bool resume_gyro,
+                   bool resume_accel,
+                   bool resume_compass,
+                   bool resume_pressure)
 {
     int result;
-    struct mpu_suspend_resume resume;
-    resume.gyro = TRUE;
-    resume.accel = resume_accel;
-    resume.compass = resume_compass;
     
     //mpu_print_cfg(mldl_cfg);
     result = ioctl((int)mlsl_handle, MPU_SET_MPU_CONFIG, mldl_cfg);
-    if (result) {
-        return result;
-    }
-    result = ioctl((int)mlsl_handle, MPU_RESUME, &resume);
-    if (ML_SUCCESS == result) {
-        mldl_cfg->is_suspended = FALSE;
-    }
+    ERROR_CHECK(result);
+    result = ioctl((int)mlsl_handle, MPU_RESUME, NULL);
+    ERROR_CHECK(result);
+    result = ioctl((int)mlsl_handle, MPU_GET_MPU_CONFIG, mldl_cfg);
+    ERROR_CHECK(result);
+    MPL_LOGI("%s: Resuming to %04lx\n", __func__, mldl_cfg->requested_sensors);
+
     return result;
 }
 
 
-int mpu3050_suspend(struct mldl_cfg *mldl_cfg, void *mlsl_handle,
+int mpu3050_suspend(struct mldl_cfg *mldl_cfg, 
+          	    void *mlsl_handle,
                     void *accel_handle,
                     void *compass_handle,
-                    bool accel, bool compass)
+                    void *pressure_handle,
+ 		    bool suspend_gyro,
+                    bool suspend_accel,
+                    bool suspend_compass,
+                    bool suspend_pressure)
 {
     int result;
-    struct mpu_suspend_resume suspend;
-    suspend.gyro = TRUE;
-    suspend.accel = accel;
-    suspend.compass = compass;
-    
-    result = ioctl((int)mlsl_handle, MPU_SUSPEND, &suspend);
-    if (ML_SUCCESS == result) {
-        mldl_cfg->is_suspended = TRUE;
-    }
+    unsigned long sensors = (ML_THREE_AXIS_GYRO |
+                             ML_THREE_AXIS_ACCEL |
+                             ML_THREE_AXIS_COMPASS |
+                             ML_THREE_AXIS_PRESSURE);
+    unsigned long requested = mldl_cfg->requested_sensors;
+
+    if (suspend_gyro)
+        sensors &= ~ML_THREE_AXIS_GYRO;
+    if (suspend_accel)
+        sensors &= ~ML_THREE_AXIS_ACCEL;
+    if (suspend_compass)
+        sensors &= ~ML_THREE_AXIS_COMPASS;
+    if (suspend_pressure)
+        sensors &= ~ML_THREE_AXIS_PRESSURE;
+
+    MPL_LOGI("%s: suspending sensors to %04lx\n", __func__, sensors);
+    mldl_cfg->requested_sensors = sensors;
+
+    result = ioctl((int)mlsl_handle, MPU_SET_MPU_CONFIG, mldl_cfg);
+    ERROR_CHECK(result);
+    result = ioctl((int)mlsl_handle, MPU_SUSPEND, NULL);
+    ERROR_CHECK(result);
+    result = ioctl((int)mlsl_handle, MPU_GET_MPU_CONFIG, mldl_cfg);
+    ERROR_CHECK(result);
+
+    mldl_cfg->requested_sensors = requested;
+    MPL_LOGI("%s: Will resume next to %04lx\n", __func__, requested);
+
     return result;
 }
 
@@ -206,6 +295,7 @@ int mpu3050_read_accel(struct mldl_cfg *mldl_cfg, void *mlsl_handle,
     result = ioctl((int)mlsl_handle, MPU_READ_ACCEL, data);
     return result;
 }
+
 int mpu3050_read_compass(struct mldl_cfg *mldl_cfg, void *mlsl_handle,
                          unsigned char * data)
 {
@@ -214,6 +304,130 @@ int mpu3050_read_compass(struct mldl_cfg *mldl_cfg, void *mlsl_handle,
     return result;
 }
 
+int mpu3050_read_pressure(struct mldl_cfg *mldl_cfg, void *mlsl_handle,
+                         unsigned char * data)
+{
+    int result;
+    result = ioctl((int)mlsl_handle, MPU_READ_PRESSURE, data);
+    return result;
+}
+
+/**
+ * Request slave to change configuration
+ *
+ * @param mldl_cfg pointer to the mldl configuration structure
+ * @param accel_handle handle to the accel sensor
+ * @param data the data being requested.
+ *
+ * @return 0 or non-zero error code
+ */
+int mpu3050_config_accel(struct mldl_cfg *mldl_cfg,
+                         void *accel_handle,
+                         struct ext_slave_config *data)
+{
+    int result;
+    result = ioctl((int)accel_handle, MPU_CONFIG_ACCEL, data);
+    return result;
+}
+
+/**
+ * Request slave to change configuration
+ *
+ * @param mldl_cfg pointer to the mldl configuration structure
+ * @param compass_handle handle to the compass sensor
+ * @param data the data being requested.
+ *
+ * @return 0 or non-zero error code
+ */
+int mpu3050_config_compass(struct mldl_cfg *mldl_cfg,
+                           void *compass_handle,
+                           struct ext_slave_config *data)
+{
+    int result;
+    result = ioctl((int)compass_handle, MPU_CONFIG_COMPASS, data);
+    return result;
+}
+
+/**
+ * Request slave to change configuration
+ *
+ * @param mldl_cfg pointer to the mldl configuration structure
+ * @param pressure_handle handle to the pressure sensor
+ * @param data the data being requested.
+ *
+ * @return 0 or non-zero error code
+ */
+int mpu3050_config_pressure(struct mldl_cfg *mldl_cfg, 
+                            void *pressure_handle,
+                            struct ext_slave_config *data)
+{
+    int result;
+    result = ioctl((int)pressure_handle, MPU_CONFIG_PRESSURE, data);
+    return result;
+}
+
+/**
+ * Request slave configuration information
+ *
+ * Use this specifically after requesting a slave configuration to see what the
+ * slave accually accepted.
+ *
+ * @param mldl_cfg pointer to the mldl configuration structure
+ * @param accel_handle handle to the accel sensor
+ * @param data the data being requested.
+ *
+ * @return 0 or non-zero error code
+ */
+int mpu3050_get_config_accel(struct mldl_cfg *mldl_cfg,
+                             void *accel_handle,
+                             struct ext_slave_config *data)
+{
+    int result;
+    result = ioctl((int)accel_handle, MPU_GET_CONFIG_ACCEL, data);
+    return result;
+}
+
+/** 
+ * Request slave configuration information
+ *
+ * Use this specifically after requesting a slave configuration to see what the
+ * slave accually accepted.
+ *
+ * @param mldl_cfg pointer to the mldl configuration structure
+ * @param compass_handle handle to the compass sensor
+ * @param data the data being requested.
+ *
+ * @return 0 or non-zero error code
+ */
+int mpu3050_get_config_compass(struct mldl_cfg *mldl_cfg,
+                               void *compass_handle,
+                               struct ext_slave_config *data)
+{
+    int result;
+    result = ioctl((int)compass_handle, MPU_GET_CONFIG_COMPASS, data);
+    return result;
+}
+
+/** 
+ * Request slave configuration information
+ *
+ * Use this specifically after requesting a slave configuration to see what the
+ * slave accually accepted.
+ *
+ * @param mldl_cfg pointer to the mldl configuration structure
+ * @param pressure_handle handle to the pressure sensor
+ * @param data the data being requested.
+ *
+ * @return 0 or non-zero error code
+ */
+int mpu3050_get_config_pressure(struct mldl_cfg *mldl_cfg, 
+                                void *pressure_handle,
+                                struct ext_slave_config *data)
+{
+    int result;
+    result = ioctl((int)pressure_handle, MPU_GET_CONFIG_PRESSURE, data);
+    return result;
+}
 
 /**
  *@}

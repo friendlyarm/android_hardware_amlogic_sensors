@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: mlglyph.h 3863 2010-10-08 22:05:31Z nroyer $
+ * $Id: mlglyph.h 4552 2011-01-21 05:56:13Z mcaramello $
  *
  *******************************************************************************/
 
@@ -22,6 +22,27 @@ extern "C" {
     /* - Defines. - */
     /* ------------ */
 
+    /**
+     *  @struct tMLGlyphData
+     *  @brief  Describes the data to be used by the character recognition 
+     *          algorithm.  When training and recognizing characters, data 
+     *          is stored and read from this data container.
+     *
+     *  @param  yGlyph
+     *  @param  xGlyph
+     *  @param  GlyphLen
+     *  @param  features
+     *  @param  gestures
+     *  @param  segments
+     *  @param  library
+     *  @param  libraryLength
+     *  @param  probs
+     *  @param  finalGesture
+     *  @param  updatingGlyph
+     *  @param  speedThresh
+     *  @param  probFinal
+     *  @param  minProb
+    **/
     typedef struct {
 
         double yGlyph[512];
@@ -29,7 +50,7 @@ extern "C" {
         unsigned short GlyphLen;
         unsigned short features[32];
         unsigned short gestures[256];
-		unsigned short segments[256];
+        unsigned short segments[256];
         unsigned short library[256][32];
         unsigned short libraryLength;
         double probs[256][4];
@@ -60,6 +81,7 @@ extern "C" {
     tMLError MLEnableGlyph(void);
     tMLError MLSetGlyphProbThresh(unsigned short prob);
     tMLError MLGetLibraryLength(unsigned short *length);
+    tMLError MLResetGlyphLibrary();
 
 #ifdef __cplusplus
 }

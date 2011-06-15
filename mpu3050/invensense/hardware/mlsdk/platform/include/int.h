@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: int.h 3865 2010-10-08 23:09:22Z nroyer $
+ * $Id: int.h 4805 2011-02-18 22:24:04Z nroyer $
  *
  *******************************************************************************/
 
@@ -13,7 +13,7 @@
 #define _INT_H
 
 #include "mltypes.h"
-#include "kernel/mpuirq.h"
+#include "mpu.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,12 +35,14 @@ extern "C" {
     /* - Function p-types. - */
     /* --------------------- */
 
-    tMLError IntOpen(const char * dev);
-    int IntProcess(struct mpuirq_data *data, long tv_sec, long tv_usec);
-    tMLError IntClose(void);
-    tMLError IntSetTimeout(int timeout);
-
-    tMLError IntDebugKernel(int on);
+    void IntOpen(const char **ints,
+                 int *handles,
+                 int numHandles);
+    int IntProcess(int *handles, int numHandles,
+                   struct mpuirq_data **data, 
+                   long tv_sec, long tv_usec);
+    tMLError IntClose(int *handles, int numHandles);
+    tMLError IntSetTimeout(int handle, int timeout);
 
 #ifdef __cplusplus
 }

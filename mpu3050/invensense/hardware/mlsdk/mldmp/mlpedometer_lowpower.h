@@ -34,6 +34,8 @@ struct stepParams {
 };
 
     tMLError MLPedometerStandAloneSetParams(const struct stepParams *params );
+    tMLError MLPedometerStandAloneSetStepBuffer(unsigned short minSteps);
+    tMLError MLPedometerStandAloneSetStepBufferResetTime(unsigned int timeMs);
 
 /******************************************************************************/
 /*  Pedometer Standalone API Features                                         */
@@ -44,8 +46,13 @@ struct stepParams {
     /* --------------------- */
 
     tMLError MLDmpPedometerStandAloneOpen(void);
+    tMLError MLDmpPedometerStandAloneClose(void);
+    tMLError MLDmpPedometerStandAloneStart(void);
+    tMLError MLDmpPedometerStandAloneStop(void);
     tMLError MLPedometerStandAloneGetNumOfSteps(unsigned long *steps);
     tMLError MLPedometerStandAloneSetNumOfSteps(unsigned long steps);
+    tMLError MLPedometerStandAloneGetWalkTime(unsigned long *time);
+    tMLError MLPedometerStandAloneSetWalkTime(unsigned long time);
 
     tMLError MLPedometerStandAloneGetNumOfCalories(unsigned short *calories);
     tMLError MLPedometerStandAloneClearNumOfCalories();

@@ -13,7 +13,6 @@ extern "C" {
 #endif
 
 FILE *fopenCMake( const char *filename, const char *prop );
-    int compareFiles( const char *filename1, const char *filename2 );
 
 #ifdef __cplusplus
 }

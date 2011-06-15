@@ -5,7 +5,7 @@
  */
 /*******************************************************************************
  *
- * $Id: mlos_linux.c 3863 2010-10-08 22:05:31Z nroyer $
+ * $Id: mlos_linux.c 4736 2011-02-08 19:07:53Z mcaramello $
  *
  *******************************************************************************/
 
@@ -77,8 +77,10 @@ tMLError MLOSCreateMutex(HANDLE *mutex)
         return ML_ERROR;
 
     res = pthread_mutex_init(pm, NULL);
-    if(res == -1) 
+    if(res == -1) {
+        free(pm);
         return ML_ERROR_OS_CREATE_FAILED;
+    }
 
     *mutex = (HANDLE)pm;
 
@@ -98,7 +100,7 @@ tMLError MLOSLockMutex(HANDLE mutex)
 
     res = pthread_mutex_lock(pm);
     if(res == -1) 
-        return ML_ERROR;
+        return ML_ERROR_OS_LOCK_FAILED;
 
     return ML_SUCCESS;
 }

@@ -7,9 +7,9 @@
  *
  * $RCSfile: mlcontrol.h,v $
  *
- * $Date: 2010-10-08 15:05:31 -0700 (Fri, 08 Oct 2010) $
+ * $Date: 2010-12-06 14:08:31 -0800 (Mon, 06 Dec 2010) $
  *
- * $Revision: 3863 $
+ * $Revision: 4230 $
  *
  *******************************************************************************/
 
@@ -33,6 +33,7 @@ extern "C" {
 #endif
 
 #include "mltypes.h"
+#include "ml.h"
 
     /* ------------ */
     /* - Defines. - */
@@ -121,9 +122,6 @@ extern "C" {
         // Indicates what functions will be used. Can be a bitwise OR of ML_GRID,
         // ML_SMOOT, ML_DEAD_ZONE, and ML_HYSTERISIS.
         unsigned short functions;
-        // Used to register which control signals will be processed. Can be a
-        // control signal or bitwise OR of multiple control signals.
-        unsigned short controlSignals;
         // Indicates which parameter array is being assigned to a control signal.
         // Must be one of ML_GYROS, ML_ANGULAR_VELOCITY, or
         // ML_ANGULAR_VELOCITY_WORLD.
@@ -133,9 +131,9 @@ extern "C" {
         unsigned short parameterAxis[4];
         // Threshold of the control signal at which the grid number will be
         // incremented or decremented.
-        int gridThreshold[4];
+        long gridThreshold[4];
         // Maximum grid number for the control signal.
-        int gridMaximum[4];
+        long gridMaximum[4];
         // User defined callback that will trigger when the grid location changes.
         void (*gridCallback)(
             // Indicates which control signal crossed a grid threshold. Must be
@@ -143,25 +141,25 @@ extern "C" {
             unsigned short controlSignal,
             // An array of four numbers representing the grid number for each
             // control signal.
-            int *gridNum,
+            long *gridNum,
             // An array of four numbers representing the change in grid number
             // for each control signal.
-            int *gridChange
+            long *gridChange
         );
     } tMLCTRLParams,    // new type definition
       MLCTRL_Params_t;  // background-compatible type definition
 
     typedef struct {
 
-        int gridNum[4];                       // Current grid number for each control signal.
-        int controlInt[4];                    // Current data for each control signal.
-        int lastGridNum[4];                   // Previous grid number
+        long gridNum[4];                      // Current grid number for each control signal.
+        long controlInt[4];                   // Current data for each control signal.
+        long lastGridNum[4];                  // Previous grid number
         unsigned char controlDir[4];          // Direction of control signal
-        int gridChange[4];                    // Change in grid number
+        long gridChange[4];                   // Change in grid number
 
         long mlGridNumDMP[4];
-        int gridNumOffset[4];
-        int prevDMPGridNum[4];
+        long gridNumOffset[4];
+        long prevDMPGridNum[4];
 
     } tMLCTRLXData,     // new type definition
       MLCTRLX_Data_t;   // background-compatible type definition
@@ -180,23 +178,22 @@ extern "C" {
 
     /*API for handling control signals*/
     tMLError MLSetControlSensitivity(unsigned short controlSignal, 
-                                     int sensitivity);
+                                     long sensitivity);
     tMLError MLSetControlFunc(unsigned short function);
     tMLError MLGetControlSignal(unsigned short controlSignal, 
-                                unsigned short reset, int *data);
+                                unsigned short reset, long *data);
     tMLError MLGetGridNum(unsigned short controlSignal, 
-                          unsigned short reset,int *data);
-    tMLError MLSetGridThresh(unsigned short controlSignal, int threshold);
-    tMLError MLSetGridMax(unsigned short controlSignal, int maximum);
+                          unsigned short reset,long *data);
+    tMLError MLSetGridThresh(unsigned short controlSignal, long threshold);
+    tMLError MLSetGridMax(unsigned short controlSignal, long maximum);
     tMLError MLSetGridCallback(void (*func)(unsigned short controlSignal, 
-                                            int *gridNum, int *gridChange) );
-    tMLError MLSetControlSignals(unsigned short controlSignals);
+                                            long *gridNum, long *gridChange) );
     tMLError MLSetControlData(unsigned short controlSignal, 
                               unsigned short parameterArray, 
                               unsigned short parameterNum);
-    tMLError MLGetControlData(int *controlSignal, 
-                              int *gridNum, 
-                              int *gridChange);
+    tMLError MLGetControlData(long *controlSignal, 
+                              long *gridNum, 
+                              long *gridChange);
     tMLError MLControlUpdate( tMLXData *mlxData );
     tMLError MLEnableControl();
     tMLError MLDisableControl();

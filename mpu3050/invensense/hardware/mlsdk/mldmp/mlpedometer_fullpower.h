@@ -10,8 +10,8 @@
  *
  ******************************************************************************/
 
-#ifndef MLPEDOMETER_LOWPOWER_C_H
-#define MLPEDOMETER_LOWPOWER_C_H
+#ifndef MLPEDOMETER_FULLPOWER_H
+#define MLPEDOMETER_FULLPOWER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,13 +28,17 @@ extern "C" {
     tMLError MLDisablePedometerFullPower(void);
     tMLError MLSetPedometerFullPowerStepCount(unsigned long steps);
     tMLError MLGetPedometerFullPowerStepCount(unsigned long *steps);
+    tMLError MLSetPedometerFullPowerWalkTime(unsigned long timeMs);
+    tMLError MLGetPedometerFullPowerWalkTime(unsigned long *timeMs);
     tMLError MLSetPedometerFullPowerStepCallback(
-        void (*func) (unsigned long stepNum) );
+        void (*func) (unsigned long stepNum, unsigned long walkTimeMs) );
 
     tMLError MLSetPedometerFullPowerParams(const struct stepParams *params);
+    tMLError MLSetPedometerFullPowerStepBuffer(unsigned short minSteps);
+    tMLError MLSetPedometerFullPowerStepBufferResetTime(unsigned int timeMs);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* PEDOMETER_STAND_ALONE_H */
+#endif /* MLPEDOMETER_FULLPOWER_H */
