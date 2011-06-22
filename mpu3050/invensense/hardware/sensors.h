@@ -57,6 +57,7 @@ __BEGIN_DECLS
 #define ID_A  (ID_GY + 1)
 #define ID_M  (ID_A + 1)
 #define ID_O  (ID_M + 1)
+#define ID_L  (ID_O + 1)
 
 /*****************************************************************************/
 

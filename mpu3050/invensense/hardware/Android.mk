@@ -36,8 +36,12 @@ LOCAL_SRC_FILES := 						\
                 InputEventReader.cpp    \
                 MPLSensor.cpp           \
                 MPLGesture.cpp
- 
-#               LightSensor.cpp			\
+
+ifeq ($(strip $(BOARD_USES_LIGHT_SENSOR)),true)
+LOCAL_SRC_FILES += LightSensorAML.cpp
+LOCAL_CPPFLAGS += -DENABLE_LIGHT_SENSOR
+endif # BOARD_USES_LIGHT_SENSOR
+
 #               ProximitySensor.cpp		\
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/mlsdk/platform/include

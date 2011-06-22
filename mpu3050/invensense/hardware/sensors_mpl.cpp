@@ -35,6 +35,7 @@
 #include "sensors.h"
 
 #include "MPLSensor.h"
+#include "LightSensor.h"
 
 /*****************************************************************************/
 
@@ -57,6 +58,7 @@
 #define SENSORS_ACCELERATION_HANDLE     (ID_A)
 #define SENSORS_MAGNETIC_FIELD_HANDLE   (ID_M)
 #define SENSORS_ORIENTATION_HANDLE      (ID_O)
+#define SENSORS_LIGHT_HANDLE            (ID_L)
 
 
 #define AKM_FTRACE 0
@@ -107,6 +109,12 @@ static const struct sensor_t sSensorList[] = {
           "Invensense",
           1, SENSORS_ORIENTATION_HANDLE,
           SENSOR_TYPE_ORIENTATION, 360.0f, 1.0f, 9.7f, 20000,{ } },
+#ifdef ENABLE_LIGHT_SENSOR
+      { "Light sensor",
+          "(none)",
+          1, SENSORS_LIGHT_HANDLE,
+          SENSOR_TYPE_LIGHT, 5000.0f, 1.0f, 1.0f, 20000,{ } },
+#endif
 
 
 };
@@ -154,6 +162,7 @@ private:
         mpl               = 0,  //all mpl entries must be consecutive and in this order
         mpl_accel,
         mpl_timer,
+        mpl_light,
         numSensorDrivers,       // wake pipe goes here
         mpl_power,              //special handle for MPL pm interaction
         numFds,            
@@ -189,6 +198,10 @@ private:
             case ID_G_SNA:
 #endif
                 return mpl;
+#ifdef ENABLE_LIGHT_SENSOR
+            case ID_L:
+                return mpl_light;
+#endif
         }
         return -EINVAL;
     }
@@ -213,6 +226,13 @@ sensors_poll_context_t::sensors_poll_context_t()
     mPollFds[mpl_timer].fd = ((MPLSensor*)mSensors[mpl])->getTimerFd();
     mPollFds[mpl_timer].events = POLLIN;
     mPollFds[mpl_timer].revents = 0;
+
+#ifdef ENABLE_LIGHT_SENSOR
+    mSensors[mpl_light] = new LightSensor();
+    mPollFds[mpl_light].fd = mSensors[mpl_light]->getFd();
+    mPollFds[mpl_light].events = POLLIN;
+    mPollFds[mpl_light].revents = 0;
+#endif
 
     int wakeFds[2];
     int result = pipe(wakeFds);
