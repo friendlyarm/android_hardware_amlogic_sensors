@@ -162,7 +162,9 @@ private:
         mpl               = 0,  //all mpl entries must be consecutive and in this order
         mpl_accel,
         mpl_timer,
+#ifdef ENABLE_LIGHT_SENSOR
         mpl_light,
+#endif
         numSensorDrivers,       // wake pipe goes here
         mpl_power,              //special handle for MPL pm interaction
         numFds,            
