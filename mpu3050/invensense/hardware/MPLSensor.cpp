@@ -313,6 +313,7 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
         {
             if( (sen_mask & ML_DMP_PROCESSOR) == 0) {
                 LOGV_IF(EXTRA_VERBOSE, "Allowing TimerIRQ");
+                s_cur_fifo_rate = -1;
                 s_use_timerirq = true;
             }
         } else {
