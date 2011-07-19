@@ -101,10 +101,12 @@ static const struct sensor_t sSensorList[] = {
         "Invensense",
         1, SENSORS_ACCELERATION_HANDLE,
         SENSOR_TYPE_ACCELEROMETER, 10240.0f, 1.0f, 0.5f, 20000,{ } },
+#ifdef ENABLE_COMPASS
       { "MPL magnetic field",
         "Invensense",
         1, SENSORS_MAGNETIC_FIELD_HANDLE,
         SENSOR_TYPE_MAGNETIC_FIELD, 10240.0f, 1.0f, 0.5f, 20000,{ } },
+#endif
       { "MPL Orientation (android deprecated format)",
           "Invensense",
           1, SENSORS_ORIENTATION_HANDLE,

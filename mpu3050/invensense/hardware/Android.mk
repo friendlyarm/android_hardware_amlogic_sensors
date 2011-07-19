@@ -42,6 +42,10 @@ LOCAL_SRC_FILES += LightSensorAML.cpp
 LOCAL_CPPFLAGS += -DENABLE_LIGHT_SENSOR
 endif # BOARD_USES_LIGHT_SENSOR
 
+ifeq ($(strip $(BOARD_HAVE_COMPASS)),true)
+LOCAL_CPPFLAGS += -DENABLE_COMPASS
+endif # BOARD_HAVE_COMPASS
+
 #               ProximitySensor.cpp		\
 
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/mlsdk/platform/include

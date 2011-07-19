@@ -65,7 +65,11 @@ extern "C" {
 #define FUNC_LOG LOGV("%s", __PRETTY_FUNCTION__)
 #define VFUNC_LOG LOGV_IF(EXTRA_VERBOSE, "%s", __PRETTY_FUNCTION__)
 /* this mask must turn on only the sensors that are present and managed by the MPL */
+#ifdef ENABLE_COMPASS
 #define ALL_MPL_SENSORS_NP (ML_THREE_AXIS_ACCEL | ML_THREE_AXIS_COMPASS | ML_THREE_AXIS_GYRO)
+#else
+#define ALL_MPL_SENSORS_NP (ML_THREE_AXIS_ACCEL | ML_THREE_AXIS_GYRO)
+#endif
 
 /* ***************************************************************************
  * MPL interface functions
