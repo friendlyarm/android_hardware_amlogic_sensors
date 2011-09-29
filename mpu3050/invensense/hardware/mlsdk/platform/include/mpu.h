@@ -163,6 +163,7 @@ enum ext_slave_id {
 	COMPASS_ID_HMC5883,
 	COMPASS_ID_LSM303,
 	COMPASS_ID_MMC314X,
+	COMPASS_ID_MMC328X,
 	COMPASS_ID_HSCDTD002B,
 	COMPASS_ID_HSCDTD004A,
 
@@ -409,6 +410,12 @@ struct ext_slave_descr *hmc5883_get_slave_descr(void);
 struct ext_slave_descr *mmc314x_get_slave_descr(void);
 #undef get_compass_slave_descr
 #define get_compass_slave_descr mmc314x_get_slave_descr
+#endif
+
+#ifdef CONFIG_MPU_SENSORS_MMC328X	/* MEMSIC compass */
+struct ext_slave_descr *mmc328x_get_slave_descr(void);
+#undef get_compass_slave_descr
+#define get_compass_slave_descr mmc328x_get_slave_descr
 #endif
 
 #ifdef CONFIG_MPU_SENSORS_LSM303DLHM	/* ST compass */

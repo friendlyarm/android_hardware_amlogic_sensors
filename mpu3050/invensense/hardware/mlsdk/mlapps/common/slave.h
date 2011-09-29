@@ -108,6 +108,7 @@
 #define USE_COMPASS_YAS530                 0
 #define USE_COMPASS_HMC5883                0
 #define USE_COMPASS_MMC314X                0
+#define USE_COMPASS_MMC328X                1
 #define USE_COMPASS_HSCDTD002B             0
 #define USE_COMPASS_HSCDTD004A             0
 
@@ -120,6 +121,7 @@
 #define COMPASS_SLAVEADDR_YAS530           0x2E
 #define COMPASS_SLAVEADDR_HMC5883          0x1E
 #define COMPASS_SLAVEADDR_MMC314X          0x30
+#define COMPASS_SLAVEADDR_MMC328X          0x30
 #define COMPASS_SLAVEADDR_HSCDTD00XX       0x0C
 
 /*
@@ -147,6 +149,10 @@
 
 #if USE_COMPASS_MMC314X
 #define DEFAULT_COMPASS_TYPE              COMPASS_ID_MMC314X
+#endif
+
+#if USE_COMPASS_MMC328X
+#define DEFAULT_COMPASS_TYPE              COMPASS_ID_MMC328X
 #endif
 
 #if USE_COMPASS_HSCDTD002B

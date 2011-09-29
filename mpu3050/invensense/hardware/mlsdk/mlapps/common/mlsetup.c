@@ -52,6 +52,7 @@
 #define CONFIG_MPU_SENSORS_YAS529        y   // Yamaha compass
 #define CONFIG_MPU_SENSORS_YAS530        y   // Yamaha compass
 #define CONFIG_MPU_SENSORS_MMC314X       y   // MEMSIC compass
+#define CONFIG_MPU_SENSORS_MMC328X       y   // MEMSIC compass
 #define CONFIG_MPU_SENSORS_HSCDTD002B    y   // ALPS compass
 #define CONFIG_MPU_SENSORS_HSCDTD004A    y   // ALPS HSCDTD004A compass
 
@@ -422,6 +423,7 @@ tMLError SetupCompassCalibration_MSB(unsigned short compassId)
              SetupCompassYAS530Calibration_MSB();
              break;
          case COMPASS_ID_MMC314X:
+         case COMPASS_ID_MMC328X:
              SetupCompassMMCCalibration_MSB();
              break;
          case COMPASS_ID_HSCDTD002B:
@@ -747,11 +749,19 @@ void SetupCompassMMCCalibration_MSB (void)
 
     gPdata.compass.adapt_num       = 0;
     gPdata.compass.bus             = EXT_SLAVE_BUS_PRIMARY;
+#if (DEFAULT_COMPASS_TYPE == COMPASS_ID_MMC314X)
 #ifndef LINUX
     gCompass = *mmc314x_get_slave_descr();
     gPdata.compass.get_slave_descr = mmc314x_get_slave_descr;
 #endif
     gPdata.compass.address         = COMPASS_SLAVEADDR_MMC314X;
+#elif (DEFAULT_COMPASS_TYPE == COMPASS_ID_MMC328X)
+#ifndef LINUX
+    gCompass = *mmc328x_get_slave_descr();
+    gPdata.compass.get_slave_descr = mmc328x_get_slave_descr;
+#endif
+    gPdata.compass.address         = COMPASS_SLAVEADDR_MMC328X;
+#endif
 }
 
 static
