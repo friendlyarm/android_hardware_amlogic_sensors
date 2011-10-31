@@ -27,7 +27,7 @@
 #include <cutils/atomic.h>
 #include <cutils/log.h>
 
-#define DEBUG_SENSOR		1
+//#define DEBUG_SENSOR		1
 
 #define CONVERT                     (GRAVITY_EARTH / 64)
 #define CONVERT_X                   -(CONVERT)
@@ -277,6 +277,12 @@ static const struct sensor_t sSensorList[] = {
 		0, 
 		{ } 
 	},
+	#ifdef ENABLE_LIGHT_SENSOR
+      { "Light sensor",
+          "(none)",
+          1, 1,
+          SENSOR_TYPE_LIGHT, 5000.0f, 1.0f, 1.0f, 20000,{ } },
+	#endif
 
 };
 
