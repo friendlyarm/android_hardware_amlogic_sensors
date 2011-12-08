@@ -125,12 +125,12 @@ static int poll__poll(struct sensors_poll_device_t *device,
 
 			switch (event.code) {
 			case ABS_X:
-				data->acceleration.y =
-						-event.value * CONVERT_Y;
-				break;
-			case ABS_Y:
 				data->acceleration.x =
 						event.value * CONVERT_X;
+				break;
+			case ABS_Y:
+				data->acceleration.y =
+						event.value * CONVERT_Y;
 				break;
 			case ABS_Z:
 				data->acceleration.z =
