@@ -134,7 +134,7 @@ static int poll__poll(struct sensors_poll_device_t *device,
 				break;
 			case ABS_Z:
 				data->acceleration.z =
-						-event.value * CONVERT_Z;
+						event.value * CONVERT_Z;
 				break;
 			}
 		} else if (event.type == EV_SYN) {
