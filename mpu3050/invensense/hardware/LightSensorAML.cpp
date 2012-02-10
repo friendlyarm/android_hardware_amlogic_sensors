@@ -112,13 +112,13 @@ int LightSensor::readEvents(sensors_event_t* data, int count)
 
 float LightSensor::indexToValue(size_t index) const
 {
-    /* GL3526 driver converts from adc value and returns an index [0,4].  Now convert it to lux levels. */
+    /* GL3526 driver converts from adc value and returns an index [0,3].  Now convert it to lux levels. */
     static float lux_value[] = {
-        3500.0,
-        1500.0,
-        800.0,
+        //100.0,
         500.0,
-        100.0,
+        800.0,
+        1500.0,
+        3500.0,
     };
     if (index > ARRAY_SIZE(lux_value))
         index = 0;
