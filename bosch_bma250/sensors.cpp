@@ -26,8 +26,10 @@
 #include <linux/input.h>
 #include <cutils/atomic.h>
 #include <cutils/log.h>
+#include <cutils/properties.h>
+#include <stdlib.h>
 
-#define DEBUG_SENSOR		1
+#define DEBUG_SENSOR		0
 
 #define CONVERT                     (GRAVITY_EARTH / 256)
 #define CONVERT_X                   -(CONVERT)
@@ -36,6 +38,47 @@
 #define SENSOR_NAME		"bma250"
 #define INPUT_DIR               "/dev/input"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
+static int gspos;
+/*
+gspos:
+0:x =  x, y =  y, z = z
+1:x = -y, y =  x, z = z
+2:x = -x, y = -y, z = z
+3:x =  y, y = -x, z = z
+4:x = -x, y =  y, z = -z
+5:x = -y, y = -x, z = -z
+6:x =  x, y = -y, z = -z
+7:x =  y, y =  x, z = -z
+*/
+int acc_bma2xx_get_install_dir(void)
+{
+	char rotationproperty[PROPERTY_VALUE_MAX],gsposproperty[PROPERTY_VALUE_MAX];
+	int rotation;
+	property_get("ro.sf.hwrotation", rotationproperty, "0");
+	property_get("ro.sf.gsensorposition", gsposproperty, "0");
+	rotation = atoi(rotationproperty);
+	gspos = atoi(gsposproperty);
+    	switch (rotation)
+	{
+		case 270:
+			return gspos;
+		default://0	90	180
+			if(gspos <= 3)
+			{
+				gspos -= rotation/90 +1;
+				if(gspos < 0)
+					gspos+=4;
+			} 
+			else if(gspos >=4)
+			{
+				gspos -= rotation/90 +1;
+				if(gspos < 4)
+					gspos+=4;
+			}
+			return gspos;
+   	}
+}
 
 struct sensors_poll_context_t {
 	struct sensors_poll_device_t device; 
@@ -116,7 +159,7 @@ static int poll__poll(struct sensors_poll_device_t *device,
 
 	if (dev->fd < 0)
 	return 0;
-
+	
 	while (1) {
 	
 		ret = read(dev->fd, &event, sizeof(event));
@@ -125,20 +168,52 @@ static int poll__poll(struct sensors_poll_device_t *device,
 
 			switch (event.code) {
 			case ABS_X:
-				data->acceleration.x =
-						event.value * CONVERT_X;				
+			    if(gspos == 0||gspos == 6){
+                    data->acceleration.x =
+						event.value * CONVERT;	
+			    } else if(gspos == 1||gspos == 7){
+                    data->acceleration.y =
+						event.value * CONVERT;	
+			    } else if(gspos == 2||gspos == 4){
+                    data->acceleration.x =
+						-event.value * CONVERT;	
+			    } else if(gspos == 3||gspos == 5){
+                    data->acceleration.y =
+						-event.value * CONVERT;	
+			    }			    
+//				data->acceleration.x =
+//						event.value * CONVERT_X;				
 //				data->acceleration.y =
 //						-event.value * CONVERT_Y;
 				break;
 			case ABS_Y:
+			    if(gspos == 0||gspos == 4){
+                    data->acceleration.y =
+						event.value * CONVERT;	
+			    } else if(gspos == 1||gspos == 5){
+                    data->acceleration.x =
+						-event.value * CONVERT;	
+			    } else if(gspos == 2||gspos == 6){
+                    data->acceleration.y =
+						-event.value * CONVERT;	
+			    } else if(gspos == 3||gspos == 7){
+                    data->acceleration.x =
+						event.value * CONVERT;	
+			    }
+			    			    
 //				data->acceleration.x =
 //						event.value * CONVERT_X;
-				data->acceleration.y =
-						event.value * CONVERT_Y;
+//				data->acceleration.y =
+//						event.value * CONVERT_Y;
 				break;
 			case ABS_Z:
-				data->acceleration.z =
-						-event.value * CONVERT_Z;
+                if(gspos < 4){
+				    data->acceleration.z =
+						event.value * CONVERT;
+			    }else{
+				    data->acceleration.z =
+						-event.value * CONVERT;			        
+			    }
 				break;
 			}
 		} else if (event.type == EV_SYN) {
@@ -336,7 +411,9 @@ static int open_sensors(const struct hw_module_t* module, const char* name,
 		LOGD("g sensor get class path error \n");
 		return -1;
 	}
-
+	
+    acc_bma2xx_get_install_dir();
+    
 	dev->fd = open_input_device();
 	*device = &dev->device.common;
 	status = 0;
