@@ -29,7 +29,7 @@
 #include <cutils/properties.h>
 #include <stdlib.h>
 
-#define DEBUG_SENSOR		0
+// #define DEBUG_SENSOR		0
 
 #define CONVERT                     (GRAVITY_EARTH / 256)
 #define CONVERT_X                   -(CONVERT)
