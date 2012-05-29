@@ -25,21 +25,40 @@
 #include <pthread.h>
 #include <linux/input.h>
 #include <cutils/atomic.h>
-#include <cutils/log.h>
+
 #include <cutils/properties.h>
 #include <stdlib.h>
 
-// #define DEBUG_SENSOR		0
+#ifdef LOG_TAG
+#undef LOG_TAG
+#define LOG_TAG "amlogic_sensor"
+#endif
+#include <cutils/log.h>
 
-#define CONVERT                     (GRAVITY_EARTH / 256)
+#define DEBUG_SENSOR		0
+
+#if defined(ACCELEROMETER_SENSOR_MMA8451)
+  #define LSG                         (4096.0f) // 4096 LSG = 1G for MMA8451
+#elif defined(ACCELEROMETER_SENSOR_MMA8450)
+  #define LSG                         (1024.0f) // 1024 LSG = 1G for MMA8450
+#elif defined(ACCELEROMETER_SENSOR_MMA8452)
+  #define LSG                         (720.0f) //(1024.0f) // 1024 LSG = 1G for MMA8452
+#elif defined(ACCELEROMETER_SENSOR_BMA250)
+  #define LSG                         (256.0f)
+#endif
+
+#ifndef SENSOR_NAME
+#error "Must define SENSOR_NAME in aml_Gsensor HAL !!"
+#endif
+
+#define CONVERT                     (GRAVITY_EARTH / LSG)
 #define CONVERT_X                   -(CONVERT)
 #define CONVERT_Y                   -(CONVERT)
 #define CONVERT_Z                   (CONVERT)
-#define SENSOR_NAME		"bma250"
 #define INPUT_DIR               "/dev/input"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
-static int gspos;
+static int sg_gspos;
 /*
 gspos:
 0:x =  x, y =  y, z = z
@@ -51,33 +70,37 @@ gspos:
 6:x =  x, y = -y, z = -z
 7:x =  y, y =  x, z = -z
 */
-int acc_bma2xx_get_install_dir(void)
+int acc_aml_get_install_dir(void)
 {
-	char rotationproperty[PROPERTY_VALUE_MAX],gsposproperty[PROPERTY_VALUE_MAX];
-	int rotation;
-	property_get("ro.sf.hwrotation", rotationproperty, "0");
-	property_get("ro.sf.gsensorposition", gsposproperty, "0");
-	rotation = atoi(rotationproperty);
-	gspos = atoi(gsposproperty);
-    	switch (rotation)
-	{
-		case 270:
-			return gspos;
-		default://0	90	180
-			if(gspos <= 3)
-			{
-				gspos -= rotation/90 +1;
-				if(gspos < 0)
-					gspos+=4;
-			} 
-			else if(gspos >=4)
-			{
-				gspos -= rotation/90 +1;
-				if(gspos < 4)
-					gspos+=4;
-			}
-			return gspos;
-   	}
+    char rotationproperty[PROPERTY_VALUE_MAX],gsposproperty[PROPERTY_VALUE_MAX];
+    int rotation;
+    int res = 0 ;
+    property_get("ro.sf.hwrotation", rotationproperty, "0");
+    property_get("ro.sf.gsensorposition", gsposproperty, "0"); 
+    rotation = atoi(rotationproperty);
+    sg_gspos = atoi(gsposproperty);
+    switch (rotation)
+    {
+        case 270:
+            res = sg_gspos;
+            break;
+        default://0	90	180
+            if(sg_gspos <= 3)
+            {
+                sg_gspos -= rotation/90 +1;
+                if(sg_gspos < 0)
+                    sg_gspos+=4;
+            } 
+            else if(sg_gspos >=4)
+            {
+                sg_gspos -= rotation/90 +1;
+                if(sg_gspos < 4)
+                    sg_gspos+=4;
+            }
+            res = sg_gspos ;
+    }
+    LOGD("sg_gspos is %d \n",sg_gspos);
+    return res ;
 }
 
 struct sensors_poll_context_t {
@@ -151,7 +174,8 @@ static int poll__setDelay(struct sensors_poll_device_t *device,
 }
 
 static int poll__poll(struct sensors_poll_device_t *device,
-        sensors_event_t* data, int count) {
+    sensors_event_t* data, int count) 
+{
 	
 	struct input_event event;
 	int ret;
@@ -164,75 +188,55 @@ static int poll__poll(struct sensors_poll_device_t *device,
 	
 		ret = read(dev->fd, &event, sizeof(event));
 
-		if (event.type == EV_ABS) {
+        if (event.type == EV_ABS) {
 
-			switch (event.code) {
-			case ABS_X:
-			    if(gspos == 0||gspos == 6){
-                    data->acceleration.x =
-						event.value * CONVERT;	
-			    } else if(gspos == 1||gspos == 7){
-                    data->acceleration.y =
-						event.value * CONVERT;	
-			    } else if(gspos == 2||gspos == 4){
-                    data->acceleration.x =
-						-event.value * CONVERT;	
-			    } else if(gspos == 3||gspos == 5){
-                    data->acceleration.y =
-						-event.value * CONVERT;	
-			    }			    
-//				data->acceleration.x =
-//						event.value * CONVERT_X;				
-//				data->acceleration.y =
-//						-event.value * CONVERT_Y;
-				break;
-			case ABS_Y:
-			    if(gspos == 0||gspos == 4){
-                    data->acceleration.y =
-						event.value * CONVERT;	
-			    } else if(gspos == 1||gspos == 5){
-                    data->acceleration.x =
-						-event.value * CONVERT;	
-			    } else if(gspos == 2||gspos == 6){
-                    data->acceleration.y =
-						-event.value * CONVERT;	
-			    } else if(gspos == 3||gspos == 7){
-                    data->acceleration.x =
-						event.value * CONVERT;	
-			    }
-			    			    
-//				data->acceleration.x =
-//						event.value * CONVERT_X;
-//				data->acceleration.y =
-//						event.value * CONVERT_Y;
-				break;
-			case ABS_Z:
-                if(gspos < 4){
-				    data->acceleration.z =
-						event.value * CONVERT;
-			    }else{
-				    data->acceleration.z =
-						-event.value * CONVERT;			        
-			    }
-				break;
-			}
-		} else if (event.type == EV_SYN) {
+            switch (event.code) {
+            case ABS_X:
+                if(sg_gspos == 0||sg_gspos == 6){
+                    data->acceleration.x = event.value * CONVERT;	
+                } else if(sg_gspos == 1||sg_gspos == 7){
+                    data->acceleration.y = event.value * CONVERT;	
+                } else if(sg_gspos == 2||sg_gspos == 4){
+                    data->acceleration.x = -event.value * CONVERT;	
+                } else if(sg_gspos == 3||sg_gspos == 5){
+                    data->acceleration.y = -event.value * CONVERT;	
+                }
+                break;
+            case ABS_Y:
+                if(sg_gspos == 0||sg_gspos == 4){
+                    data->acceleration.y = event.value * CONVERT;	
+                } else if(sg_gspos == 1||sg_gspos == 5){
+                    data->acceleration.x = -event.value * CONVERT;	
+                } else if(sg_gspos == 2||sg_gspos == 6){
+                    data->acceleration.y = -event.value * CONVERT;	
+                } else if(sg_gspos == 3 ||sg_gspos == 7){
+                    data->acceleration.x = event.value * CONVERT;	
+                }
+                break;
+            case ABS_Z:
+                if(sg_gspos < 4 ){
+                    data->acceleration.z = event.value * CONVERT;
+                }else{
+                    data->acceleration.z = -event.value * CONVERT;			        
+                }
+                break;
+            }
+    	} else if (event.type == EV_SYN) {
 
-			data->timestamp =
-			(int64_t)((int64_t)event.time.tv_sec*1000000000
-					+ (int64_t)event.time.tv_usec*1000);
-			data->sensor = 0;
-			data->type = SENSOR_TYPE_ACCELEROMETER;
-			data->acceleration.status = SENSOR_STATUS_ACCURACY_HIGH;
-			
-		
-#ifdef DEBUG_SENSOR
-			LOGD("Sensor data: t x,y,x: %f %f, %f, %f\n",
-					data->timestamp / 1000000000.0,
-							data->acceleration.x,
-							data->acceleration.y,
-							data->acceleration.z);
-#endif
+            data->timestamp =
+    		    (int64_t)((int64_t)event.time.tv_sec*1000000000
+    				+ (int64_t)event.time.tv_usec*1000);
+            data->sensor = 0;
+            data->type = SENSOR_TYPE_ACCELEROMETER;
+            data->acceleration.status = SENSOR_STATUS_ACCURACY_HIGH;
+
+            #ifdef DEBUG_SENSOR
+            LOGD("Sensor data(sg_gspos is %d): t: %f,  x,y,z:%f, %f, %f\n",sg_gspos,
+    				data->timestamp / 1000000000.0,
+				data->acceleration.x,
+				data->acceleration.y,
+				data->acceleration.z);
+            #endif
 			
 		return 1;	
 
@@ -406,13 +410,12 @@ static int open_sensors(const struct hw_module_t* module, const char* name,
 	dev->device.setDelay        = poll__setDelay;
 	dev->device.poll            = poll__poll;
 
-
 	if(sensor_get_class_path(dev) < 0) {
 		LOGD("g sensor get class path error \n");
 		return -1;
 	}
 	
-    acc_bma2xx_get_install_dir();
+    acc_aml_get_install_dir();
     
 	dev->fd = open_input_device();
 	*device = &dev->device.common;

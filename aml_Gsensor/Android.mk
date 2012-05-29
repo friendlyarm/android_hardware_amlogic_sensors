@@ -14,12 +14,24 @@
 
 
 LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
 
+FLAG_AML := false
 ifeq ($(BOARD_USES_SENSOR_BMA250),true)
+FLAG_AML := true
+LOCAL_CFLAGS := -DSENSOR_NAME=\"bma250\" -DACCELEROMETER_SENSOR_BMA250
+endif #BOARD_USES_SENSOR_BMA250
 
+ifeq ($(BOARD_USES_SENSOR_MMA8452),true)
+FLAG_AML := true
+LOCAL_CFLAGS := -DSENSOR_NAME=\"amlGsensor\" -DACCELEROMETER_SENSOR_MMA8452
+endif #BOARD_USES_SENSOR_MMA8452
+
+
+ifeq ($(FLAG_AML),true)
 # HAL module implemenation, not prelinked, and stored in
 # hw/<SENSORS_HARDWARE_MODULE_ID>.<ro.product.board>.so
-include $(CLEAR_VARS)
+
 
 LOCAL_MODULE := sensors.amlogic
 
@@ -27,7 +39,6 @@ LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 
 LOCAL_MODULE_TAGS := optional
 
-LOCAL_CFLAGS := -DLOG_TAG=\"Sensors\"
 LOCAL_SRC_FILES := 						\
 				sensors.cpp 			\
 				
