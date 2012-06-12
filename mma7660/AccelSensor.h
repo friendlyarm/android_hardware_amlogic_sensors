@@ -49,6 +49,10 @@ public:
 private:
     uint32_t mEnabled;
     uint32_t mPendingMask;
+    int mConvert_x_y;
+    int mConvert_x;
+    int mConvert_y ;
+    int mConvert_z ;
     InputEventCircularReader mInputReader;
     sensors_event_t mPendingEvents[numSensors];
     int mMinPollDelay;

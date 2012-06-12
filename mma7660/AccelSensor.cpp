@@ -25,6 +25,7 @@
 #include <sys/select.h>
 #include <dlfcn.h>
 #include <cutils/log.h>
+#include <cutils/properties.h>
 
 #include "AccelSensor.h"
 
@@ -78,6 +79,27 @@ AccelSensor::AccelSensor()
             mPendingEvents[Accelerometer].acceleration.z = absinfo.value * CONVERT_A_Z;
         }
     }
+    char gsposproperty[PROPERTY_VALUE_MAX];
+    property_get("ro.sf.Gconvert_x_y", gsposproperty, "0");
+    mConvert_x_y = atoi(gsposproperty);
+    property_get("ro.sf.Gconvert_x", gsposproperty, "0");
+    mConvert_x = atoi(gsposproperty); 
+    if(mConvert_x)
+        mConvert_x = -1 ;
+    else
+        mConvert_x = 1 ;
+    property_get("ro.sf.Gconvert_y", gsposproperty, "0");
+    mConvert_y = atoi(gsposproperty); 
+    if(mConvert_y)
+        mConvert_y = -1 ;
+    else
+        mConvert_y = 1;
+    property_get("ro.sf.Gconvert_z", gsposproperty, "0");
+    mConvert_z = atoi(gsposproperty); 
+    if(mConvert_z)
+        mConvert_z = -1 ;
+    else
+        mConvert_z = 1;
 }
 
 AccelSensor::~AccelSensor()
@@ -270,18 +292,21 @@ int AccelSensor::readEvents(sensors_event_t* data, int count)
 
 void AccelSensor::processEvent(int code, int value)
 {
+    if(mConvert_x_y)
+        if(code==EVENT_TYPE_ACCEL_X || code==EVENT_TYPE_ACCEL_Y)
+            code==EVENT_TYPE_ACCEL_X? code=EVENT_TYPE_ACCEL_Y:code=EVENT_TYPE_ACCEL_X;
     switch (code) {
         case EVENT_TYPE_ACCEL_X:
             mPendingMask |= 1<<Accelerometer;
-            mPendingEvents[Accelerometer].acceleration.x = value * CONVERT_A_X;
+            mPendingEvents[Accelerometer].acceleration.x = value * CONVERT_A_X*mConvert_x;
             break;
         case EVENT_TYPE_ACCEL_Y:
             mPendingMask |= 1<<Accelerometer;
-            mPendingEvents[Accelerometer].acceleration.y = value * CONVERT_A_Y;
+            mPendingEvents[Accelerometer].acceleration.y = value * CONVERT_A_Y*mConvert_y;
             break;
         case EVENT_TYPE_ACCEL_Z:
             mPendingMask |= 1<<Accelerometer;
-            mPendingEvents[Accelerometer].acceleration.z = value * CONVERT_A_Z;
+            mPendingEvents[Accelerometer].acceleration.z = value * CONVERT_A_Z*mConvert_z;
             break;
     }
 }
