@@ -27,6 +27,10 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_CFLAGS := -DLOG_TAG=\"Sensors\"
 LOCAL_CPPFLAGS += -DACCELEROMETER_SENSOR_MMA7660
 
+ifeq ($(strip $(BOARD_USES_LIGHT_SENSOR)),true)
+    LOCAL_CPPFLAGS += -DENABLE_LIGHT_SENSOR
+endif # BOARD_USES_LIGHT_SENSOR
+
 LOCAL_SRC_FILES := 						\
 				sensors.cpp 			\
 				SensorBase.cpp			\

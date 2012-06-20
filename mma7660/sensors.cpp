@@ -65,10 +65,12 @@ static const struct sensor_t sSensorList[] = {
           "Freescale Semiconductor Inc.",
           1, SENSORS_ACCELERATION_HANDLE,
           SENSOR_TYPE_ACCELEROMETER, RANGE_A, CONVERT_A, 0.30f, 20000, { } },
+#ifdef ENABLE_LIGHT_SENSOR
         { "ISL29023 Light sensor",
           "Intersil",
           1, SENSORS_LIGHT_HANDLE,
           SENSOR_TYPE_LIGHT, 16000.0f, 1.0f, 0.35f, 0, { } },
+#endif
 };
 
 
@@ -111,8 +113,10 @@ struct sensors_poll_context_t {
 
 private:
     enum {
+#ifdef ENABLE_LIGHT_SENSOR
         light           = 0,
-        accel             = 1,
+#endif
+        accel,
         numSensorDrivers,
         numFds,
     };
@@ -129,8 +133,10 @@ private:
             case ID_M:
             case ID_O:
                 return accel;
+#ifdef ENABLE_LIGHT_SENSOR
             case ID_L:
                 return light;
+#endif
         }
         return -EINVAL;
     }
@@ -140,10 +146,12 @@ private:
 
 sensors_poll_context_t::sensors_poll_context_t()
 {
+#ifdef ENABLE_LIGHT_SENSOR
     mSensors[light] = new LightSensor();
     mPollFds[light].fd = mSensors[light]->getFd();
     mPollFds[light].events = POLLIN;
     mPollFds[light].revents = 0;
+#endif
 
     mSensors[accel] = new AccelSensor();
     mPollFds[accel].fd = mSensors[accel]->getFd();
