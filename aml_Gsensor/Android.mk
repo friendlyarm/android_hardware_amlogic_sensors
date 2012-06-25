@@ -17,7 +17,7 @@ LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
 FLAG_AML := false
-ifeq ($(BOARD_USES_SENSOR_BMA250),true)
+ifeq ($(BOARD_USES_SENSOR_BMA250_AML),true)
 FLAG_AML := true
 LOCAL_CFLAGS := -DSENSOR_NAME=\"bma250\" -DACCELEROMETER_SENSOR_BMA250
 endif #BOARD_USES_SENSOR_BMA250
@@ -32,6 +32,10 @@ ifeq ($(FLAG_AML),true)
 # HAL module implemenation, not prelinked, and stored in
 # hw/<SENSORS_HARDWARE_MODULE_ID>.<ro.product.board>.so
 
+#ifeq ($(BOARD_USES_LIGHT_SENSOR),true)
+ifeq ($(BOARD_USES_LIGHT_SENSOR),true)
+LOCAL_CFLAGS += -DENABLE_LIGHT_SENSOR 
+endif #BOARD_USES_LIGHT_SENSOR
 
 LOCAL_MODULE := sensors.amlogic
 
@@ -40,7 +44,11 @@ LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_MODULE_TAGS := optional
 
 LOCAL_SRC_FILES := 						\
-				sensors.cpp 			\
+				Gsensor.cpp 			\
+				sensors_aml.cpp          \
+				SensorBase.cpp           \
+				InputEventReader.cpp   \
+				LightSensorAML.cpp
 				
 LOCAL_SHARED_LIBRARIES := liblog libcutils
 LOCAL_PRELINK_MODULE := false
