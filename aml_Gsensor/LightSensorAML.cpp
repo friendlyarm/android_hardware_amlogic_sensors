@@ -53,7 +53,7 @@ int LightSensor::setDelay(int32_t handle, int64_t ns)
 
 int LightSensor::enable(int32_t handle, int en)
 {
-    LOGD("LightSensor::enable :%d ",en);
+    ALOGD("LightSensor::enable :%d ",en);
     int flags = en ? 1 : 0;
     mEventsSinceEnable = 0;
     mPreviousLight = -1;
@@ -81,7 +81,7 @@ int LightSensor::readEvents(sensors_event_t* data, int count)
 
     ssize_t n = mInputReader.fill(data_fd);
     if (n < 0){
-        LOGE("LightSensor::readEvents mInputReader.fill failed!!");
+        ALOGE("LightSensor::readEvents mInputReader.fill failed!!");
         return n;
     }
 
@@ -105,12 +105,12 @@ int LightSensor::readEvents(sensors_event_t* data, int count)
                 numEventReceived++;
                 mPreviousLight = mPendingEvent.light;
                 #ifdef DBG_LIGHT
-                    LOGE("light_sensor:data->sensor =%d,data->type=%d,mPendingEvent.light=%f",
+                    ALOGE("light_sensor:data->sensor =%d,data->type=%d,mPendingEvent.light=%f",
                         data->sensor ,data->type ,mPendingEvent.light);
                 #endif
             }
         } else {
-            LOGE("LightSensor: unknown event (type=%d, code=%d)",
+            ALOGE("LightSensor: unknown event (type=%d, code=%d)",
                     type, event->code);
         }
         mInputReader.next();

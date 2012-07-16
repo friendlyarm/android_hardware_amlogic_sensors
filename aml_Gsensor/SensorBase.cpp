@@ -53,7 +53,7 @@ SensorBase::~SensorBase() {
 int SensorBase::open_device() {
     if (dev_fd<0 && dev_name) {
         dev_fd = open(dev_name, O_RDONLY);
-        LOGE_IF(dev_fd<0, "Couldn't open %s (%s)", dev_name, strerror(errno));
+        ALOGE_IF(dev_fd<0, "Couldn't open %s (%s)", dev_name, strerror(errno));
     }
     return 0;
 }
@@ -115,7 +115,7 @@ int SensorBase::openInput(const char* inputName) {
             }
             if (!strcmp(name, inputName)) {
                 strcpy(input_name, filename);
-                LOGD("openInput input_name:%s", input_name);
+                ALOGD("openInput input_name:%s", input_name);
                 break;
             } else {
                 close(fd);
@@ -125,6 +125,6 @@ int SensorBase::openInput(const char* inputName) {
     }
     closedir(dir);
     if(fd<0)
-        LOGE("couldn't find '%s' input device", inputName);
+        ALOGE("couldn't find '%s' input device", inputName);
     return fd;
 }

@@ -184,11 +184,11 @@ GSensor::GSensor() :
 {
     m_gspos = acc_aml_get_install_dir();
     if(0> sensor_get_class_path(class_path) ){
-        LOGE("failed to sensor_get_class_path!!");
+        ALOGE("failed to sensor_get_class_path!!");
         return ;
     }
 
-    LOGD("dgt GSensor:m_gspos=%d,class_path is %s \n", m_gspos, class_path);
+    ALOGD("dgt GSensor:m_gspos=%d,class_path is %s \n", m_gspos, class_path);
 }
 
 GSensor:: ~GSensor()
@@ -198,7 +198,7 @@ GSensor:: ~GSensor()
 
 int GSensor::getFd() const
 {
-    LOGV("GSensor::getFd returning %d", data_fd);
+    ALOGV("GSensor::getFd returning %d", data_fd);
     return data_fd;
 }
 
@@ -272,10 +272,11 @@ int GSensor:: readEvents(sensors_event_t* data, int count) {
             data->sensor = ID_A;
             data->type = SENSOR_TYPE_ACCELEROMETER;
             data->acceleration.status = SENSOR_STATUS_ACCURACY_HIGH;
+            data->version = sizeof(sensors_event_t);
 			
 		
 #ifdef DEBUG_SENSOR
-    	    LOGD("Sensor data: t x,y,x: %f %f, %f, %f\n",
+    	    ALOGD("Sensor data: t x,y,x: %f %f, %f, %f\n",
     			data->timestamp / 1000000000.0,
     					data->acceleration.x,
     					data->acceleration.y,

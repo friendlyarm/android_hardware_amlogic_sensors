@@ -16,7 +16,7 @@
  */
 //#define LOG_NDEBUG 0
 #define LOG_TAG "Sensors"
-#define FUNC_LOG LOGV("%s", __PRETTY_FUNCTION__)
+#define FUNC_LOG ALOGV("%s", __PRETTY_FUNCTION__)
 
 #include <hardware/sensors.h>
 #include <fcntl.h>
@@ -179,7 +179,7 @@ sensors_poll_context_t::sensors_poll_context_t()
     mPollFds[aml_light].fd = mSensors[aml_light]->getFd();
     mPollFds[aml_light].events = POLLIN;
     mPollFds[aml_light].revents = 0;
-    LOGD("sensors_poll_context_t  [aml_light].fd is %d\n", mPollFds[aml_light].fd);
+    ALOGD("sensors_poll_context_t  [aml_light].fd is %d\n", mPollFds[aml_light].fd);
 #endif
     
 }
@@ -200,7 +200,7 @@ int sensors_poll_context_t::activate(int handle, int enabled)
     if (index < 0) return index;
     int err =  mSensors[index]->enable(handle, enabled);
     if (err) {
-        LOGE("handle[%d] ,sensors_poll_context_t failed to activate (%s)", handle,strerror(errno));
+        ALOGE("handle[%d] ,sensors_poll_context_t failed to activate (%s)", handle,strerror(errno));
     }
     return err;
 }
@@ -225,9 +225,10 @@ int sensors_poll_context_t::pollEvents(sensors_event_t* data, int count)
         for (int i=0 ; count && i<numSensorDrivers ; i++) {
             SensorBase* const sensor(mSensors[i]);
             if (mPollFds[i].revents & POLLIN) {
+#ifdef ENABLE_LIGHT_SENSOR
                 if( i == aml_light)
-                    LOGD("LightSensor is going to readEvents");
-                
+                    ALOGD("LightSensor is going to readEvents");
+#endif                
                 int nb = sensor->readEvents(data, count);
                 if (nb >0) {
                     // no more data for this sensor
@@ -246,7 +247,7 @@ int sensors_poll_context_t::pollEvents(sensors_event_t* data, int count)
 
             n = poll(mPollFds, numFds, nbEvents ? 0 : polltime);
             if (n<0) {
-                LOGE("poll() failed (%s)", strerror(errno));
+                ALOGE("poll() failed (%s)", strerror(errno));
                 return -errno;
             }
         }
