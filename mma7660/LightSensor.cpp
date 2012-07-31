@@ -109,8 +109,8 @@ int LightSensor::readEvents(sensors_event_t* data, int count)
                 mPreviousLight = mPendingEvent.light;
             }
         } else {
-            LOGE("LightSensor: unknown event (type=%d, code=%d)",
-                    type, event->code);
+            //LOGE("LightSensor: unknown event (type=%d, code=%d)",
+            //        type, event->code);
         }
         mInputReader.next();
     }
