@@ -132,13 +132,12 @@ private:
 #ifdef ENABLE_LIGHT_SENSOR
         aml_light,
 #endif
-        numSensorDrivers,       // wake pipe goes here
-        numFds,            
+        numSensorDrivers,   
     };
 
     static const size_t wake = numFds - 2;
     static const char WAKE_MESSAGE = 'W';
-    struct pollfd mPollFds[numFds];
+    struct pollfd mPollFds[numSensorDrivers];
     int mWritePipeFd;
     int sleep_fd;
     int wake_fd;
@@ -179,7 +178,6 @@ sensors_poll_context_t::sensors_poll_context_t()
     mPollFds[aml_light].fd = mSensors[aml_light]->getFd();
     mPollFds[aml_light].events = POLLIN;
     mPollFds[aml_light].revents = 0;
-    ALOGD("sensors_poll_context_t  [aml_light].fd is %d\n", mPollFds[aml_light].fd);
 #endif
     
 }
@@ -225,10 +223,6 @@ int sensors_poll_context_t::pollEvents(sensors_event_t* data, int count)
         for (int i=0 ; count && i<numSensorDrivers ; i++) {
             SensorBase* const sensor(mSensors[i]);
             if (mPollFds[i].revents & POLLIN) {
-#ifdef ENABLE_LIGHT_SENSOR
-                if( i == aml_light)
-                    ALOGD("LightSensor is going to readEvents");
-#endif                
                 int nb = sensor->readEvents(data, count);
                 if (nb >0) {
                     // no more data for this sensor
@@ -243,9 +237,8 @@ int sensors_poll_context_t::pollEvents(sensors_event_t* data, int count)
             // we still have some room, so try to see if we can get
             // some events immediately or just wait if we don't have
             // anything to return
-            int i;
 
-            n = poll(mPollFds, numFds, nbEvents ? 0 : polltime);
+            n = poll(mPollFds, numSensorDrivers, nbEvents ? 0 : polltime);
             if (n<0) {
                 ALOGE("poll() failed (%s)", strerror(errno));
                 return -errno;
