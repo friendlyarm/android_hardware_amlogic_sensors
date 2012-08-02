@@ -135,12 +135,8 @@ private:
         numSensorDrivers,   
     };
 
-    static const size_t wake = numFds - 2;
     static const char WAKE_MESSAGE = 'W';
     struct pollfd mPollFds[numSensorDrivers];
-    int mWritePipeFd;
-    int sleep_fd;
-    int wake_fd;
     SensorBase* mSensors[numSensorDrivers];
 
     int handleToDriver(int handle) const {
