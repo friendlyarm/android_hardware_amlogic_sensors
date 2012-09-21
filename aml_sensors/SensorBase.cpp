@@ -40,7 +40,6 @@
 #define ALOGV_IF	LOGV_IF
 #endif
 
-
 SensorBase::SensorBase(
         const char* dev_name,
         const char* data_name)
@@ -55,8 +54,8 @@ SensorBase::SensorBase(
 SensorBase::SensorBase(
         const char* dev_name,
 	enum sensor_type s_type)
-    : dev_name(dev_name), data_name(NULL),
-      dev_fd(-1), data_fd(-1), sensor_cfg(NULL)
+    : dev_name(dev_name),
+      dev_fd(-1), data_fd(-1), sensor_cfg(NULL), using_dummy(0)
 {
 	printf("Aml sensor hal, about to probeInput\n");
 	data_fd = probeInput(s_type);	
@@ -88,10 +87,10 @@ int SensorBase::close_device() {
 }
 
 int SensorBase::getFd() const {
-    if (!data_name) {
-        return dev_fd;
-    }
-    return data_fd;
+
+	if(data_fd>=0)
+		return data_fd;
+	return dev_fd;
 }
 
 int SensorBase::setDelay(int32_t handle, int64_t ns) {
@@ -158,6 +157,13 @@ int SensorBase::probeInput(enum sensor_type s_type)
     char *filename;
     DIR *dir;
     struct dirent *de;
+
+	
+	int found_match = 0;
+	int dummy_fd = -1;
+	int found_dummy = 0;
+
+
     dir = opendir(dirname);
     if(dir == NULL)
         return -1;
@@ -173,20 +179,17 @@ int SensorBase::probeInput(enum sensor_type s_type)
         fd = open(devname, O_RDONLY);
         if (fd>=0) {
 		char name[80];
-		int found_match = 0;
 		const struct sensor_config *pconfig = get_supported_sensor_cfg();
 		if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), &name) < 1) {
 			name[0] = '\0';
 		}
-
 		ALOGD("Aml sensor hal, probing input : %s\n", name);
-		printf("Aml sensor hal, probing input : %s\n", name);
 		while(pconfig->type != AML_SENSOR_TYPE_NONE)
 		{
 		    if ((s_type == pconfig->type) && (!strcmp(name, pconfig->name))) {
 			strcpy(input_name, filename);
 			found_match = 1;
-			ALOGD("openInput input_name:%s", input_name);
+			ALOGD("openInput input_name:%s", name);
 			break;
 		    }
 		    pconfig++;
@@ -195,16 +198,71 @@ int SensorBase::probeInput(enum sensor_type s_type)
 		if(found_match)
 		{
 			sensor_cfg = pconfig;
-			data_name = pconfig->name;
 			break;
 		}
 		else
 		{
-			close(fd);
-			fd = -1;
-		}
-	}
+			unsigned long bits;
+			if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(bits)), &bits) <= 0) 
+			{
+				ALOGE("Get ABS event bit failed. \n");
+			}
+			else
+			{
+				int type_match = 0;
+				switch(s_type)
+				{
+					case AML_SENSOR_TYPE_GRAVITY :
+					if(bits & (1UL<<ABS_X) && bits & (1UL<<ABS_Y) && (1UL<<ABS_Z))
+						type_match = 1;
+					break;
+
+					case AML_SENSOR_TYPE_LIGHT :
+					break;
+					case AML_SENSOR_TYPE_COMPASS:
+					break;
+					default :
+					break;
+				}
+				if(type_match)
+				{
+					found_dummy++;
+					if(found_dummy == 1)
+					{//Found a dummy sensor. Keep the file open.
+					ALOGD("Found a dummy sensor %s\n", name);
+						dummy_fd = fd;
+						set_dummy_sensor_name(s_type, name);
+						fd = -1;
+					}
+					else
+					{//Found more than one dummy sensor, close them all.
+						//close previously founded dummy sensor fd.
+						close(dummy_fd);
+						dummy_fd = -1;
+						//close current fd
+						close(fd);
+						fd = -1;
+					}
+				}
+				else
+				{
+					close(fd);
+					fd = -1;	
+				}
+			}//if(ioctl)
+
+		}//if(found_match)
+	}//if(fd>=0)
+    }//while
+
+    if(!found_match && found_dummy==1)
+    {//No matched sensor, but found one and only one dummy sensor.
+	fd = dummy_fd;
+	sensor_cfg = get_dummy_sensor_cfg(s_type);
+	using_dummy = 1;
+	ALOGD("Found no match, reckon %s as sensor and use dummy configuration\n", sensor_cfg->name);
     }
+		    
     closedir(dir);
     if(fd<0)
         ALOGE("Sensor HAL failed to find a supported device");

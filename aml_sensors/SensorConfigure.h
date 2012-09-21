@@ -31,5 +31,6 @@ struct sensor_config
 };
 
 const struct sensor_config *get_supported_sensor_cfg();
-
+const struct sensor_config *get_dummy_sensor_cfg(enum sensor_type);
+void set_dummy_sensor_name(enum sensor_type s_type, const char *name);
 #endif

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <linux/input.h>
+#include <cutils/log.h>
 #include "SensorConfigure.h"
 
 static int dither(int value, int old_val, int fuzz)
@@ -97,7 +98,7 @@ int mma7660_filter(unsigned int code, int val)
 
 	return val;
 }
-
+static char dummy_gsensor_name[80] = "dummy gravity sensor";
 const static struct sensor_config supported_sensors[] =
 {
 		{"bma250", AML_SENSOR_TYPE_GRAVITY, {{0, 256.0f}}},
@@ -110,7 +111,36 @@ const static struct sensor_config supported_sensors[] =
 		{NULL, AML_SENSOR_TYPE_NONE, {{0, 0}}},	
 };	
 
+const static struct sensor_config dummy_sensors[] =
+{
+		{(const char *)dummy_gsensor_name, AML_SENSOR_TYPE_GRAVITY, {{0, 256.0f}}},
+
+};
+
+
 const struct sensor_config *get_supported_sensor_cfg()
 {
 	return &supported_sensors[0];
+}
+const struct sensor_config *get_dummy_sensor_cfg(enum sensor_type s_type)
+{
+	unsigned int i = 0;
+	for(; i < sizeof(dummy_sensors); i++)
+	{
+		if(dummy_sensors[i].type == s_type)
+			return &dummy_sensors[i];
+	}
+	return NULL;
+}
+
+
+void set_dummy_sensor_name(enum sensor_type s_type, const char *name)
+{
+	const struct sensor_config *config = get_dummy_sensor_cfg(s_type);
+	if(config)
+	{
+		char *name_stripped = const_cast<char *> (config->name);
+		ALOGD("Coping dummy name %s\n",name);
+		strncpy(name_stripped, name, 80);	
+	}
 }

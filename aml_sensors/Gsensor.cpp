@@ -263,10 +263,15 @@ int GSensor::getFd() const
 
  int GSensor:: enable(int handle, int enabled) {
 	char buffer[20];
-
+	int ret;
 	int bytes = sprintf(buffer, "%d\n", enabled);
 
-	return set_sysfs_input_attr(class_path,"enable",buffer,bytes);
+	ret = set_sysfs_input_attr(class_path,"enable",buffer,bytes);
+
+	//For dummy sensor, be tolerant of set_sysfs failure by pretending to enabl sucessfully.
+	if(using_dummy)
+		return 0;
+	return ret;
 }
 
 int GSensor:: setDelay(int handle, int64_t ns) {

@@ -35,6 +35,7 @@ protected:
     char        class_path[PATH_MAX];
     int         dev_fd;
     int         data_fd;
+	int using_dummy;
 	const struct sensor_config *sensor_cfg;
 
     int openInput(const char* inputName);

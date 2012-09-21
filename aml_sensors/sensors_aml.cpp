@@ -211,6 +211,7 @@ int sensors_poll_context_t::activate(int handle, int enabled)
     FUNC_LOG;
     int index = handleToDriver(handle);
     if (index < 0) return index;
+
     int err =  mSensors[index]->enable(handle, enabled);
     if (err) {
         ALOGE("handle[%d] ,sensors_poll_context_t failed to activate (%s)", handle,strerror(errno));
@@ -232,7 +233,6 @@ int sensors_poll_context_t::pollEvents(sensors_event_t* data, int count)
     int nbEvents = 0;
     int n = 0;
     int polltime = -1;
-
     do {
         // see if we have some leftover from the last poll()
         for (int i=0 ; count && i<numSensorDrivers ; i++) {
