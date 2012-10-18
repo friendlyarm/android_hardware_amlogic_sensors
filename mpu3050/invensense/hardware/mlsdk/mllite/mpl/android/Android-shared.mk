@@ -3,7 +3,10 @@ LIBRARY = $(LIB_PREFIX)$(MLLITE_LIB_NAME).$(SHARED_LIB_EXT)
 
 MK_NAME = $(notdir $(CURDIR)/$(firstword $(MAKEFILE_LIST)))
 
-CROSS = $(ANDROID_ROOT)/prebuilt/linux-x86/toolchain/arm-eabi-4.4.0/bin/arm-eabi-
+ifeq ($(CROSS), )
+CROSS = $(ANDROID_ROOT)/prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi-
+endif
+
 COMP  = $(CROSS)gcc
 LINK  = $(CROSS)gcc 
 
@@ -29,7 +32,7 @@ CFLAGS += -fno-exceptions -ffunction-sections -funwind-tables
 CFLAGS += -fstack-protector -fno-short-enums -fmessage-length=0
 #CFLAGS += -mfpu=neon -march=armv7-a -mfloat-abi=softfp -D__ARM_ARCH_7TE__ 
 #CFLAGS += -DMLMATH 
-CFLAGS += -I$(MPL_DIR) -I$(MLLITE_DIR) -I$(MLPLATFORM_DIR)/include
+CFLAGS += -I$(MPL_DIR) -I$(MLLITE_DIR) -I$(MLPLATFORM_DIR)/include 
 CFLAGS += -I$(MLSDK_ROOT)/mlutils -I$(MLSDK_ROOT)/mlapps/common
 
 LLINK   = -lc -lm -lutils -lcutils -lgcc
@@ -107,9 +110,11 @@ ML_OBJS_DST = $(addprefix $(OBJFOLDER)/,$(addsuffix .o, $(notdir $(ML_SOURCES)))
 ####################################################################################################
 ## rules
 
-.PHONY: all clean cleanall
+.PHONY: all clean cleanall libs 
 
 all: $(LIBRARY) $(MK_NAME)
+libs : $(LIBRARY) $(MK_NAME)
+
 
 $(LIBRARY) : $(OBJFOLDER) $(ML_OBJS_DST) $(MK_NAME)
 	@$(call echo_in_colors, "\n<linking $(LIBRARY) with objects $(ML_OBJS_DST)\n")

@@ -31,7 +31,7 @@
 #include <stdarg.h>
 
 #ifdef ANDROID
-#include <utils/Log.h>		/* For the LOG macro */
+#include <cutils/log.h>		/* For the LOG macro */
 #endif
 
 #ifdef __KERNEL__
@@ -258,7 +258,7 @@ extern "C" {
 #ifndef MPL_LOG_PRI
 #ifdef ANDROID
 #define MPL_LOG_PRI(priority, tag, fmt, ...) \
-	LOG(priority, tag, fmt, ##__VA_ARGS__)
+	ALOG(priority, tag, fmt, ##__VA_ARGS__)
 #elif defined __KERNEL__
 #define MPL_LOG_PRI(priority, tag, fmt, ...) \
 	pr_debug(MPL_##priority tag fmt, ##__VA_ARGS__)
