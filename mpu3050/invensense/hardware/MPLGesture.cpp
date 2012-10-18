@@ -41,6 +41,7 @@ extern "C" {
 #include "mldl.h"
 #include "mlFIFO.h"
 
+
 extern "C" {
     void initMPL();
     void setupCallbacks();
@@ -62,8 +63,8 @@ extern "C" {
 }
 
 #define EXTRA_VERBOSE (1)
-#define FUNC_LOG LOGV("%s", __PRETTY_FUNCTION__)
-#define VFUNC_LOG LOGV_IF(EXTRA_VERBOSE, "%s", __PRETTY_FUNCTION__)
+#define FUNC_LOG ALOGV("%s", __PRETTY_FUNCTION__)
+#define VFUNC_LOG ALOGV_IF(EXTRA_VERBOSE, "%s", __PRETTY_FUNCTION__)
 
 sensors_event_t* output_gesture_list;
 extern uint32_t* s_enabledMask;
@@ -95,20 +96,20 @@ extern bool s_sys_ped_enabled;  //flag indicating if the sys-api ped is enabled
 
     result = MLEnablePedometer();
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLEnablePedometer returned %d\n",result);
+        ALOGE("Fatal error: MLEnablePedometer returned %d\n",result);
     }
 
     result = MLPedometerSetDataRate(6);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLPedometerSetDataRate returned %d\n",result);
+        ALOGE("Fatal error: MLPedometerSetDataRate returned %d\n",result);
     }
 
     result = MLClearNumOfSteps();
-    if(result != ML_SUCCESS) LOGE("MLClearNumOfSteps fail (%d)", result);
+    if(result != ML_SUCCESS) ALOGE("MLClearNumOfSteps fail (%d)", result);
 
     result = MLSetStepCallback( cb_onStep );
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLSetStepCallback returned %d\n",result);
+        ALOGE("Fatal error: MLSetStepCallback returned %d\n",result);
     }
 }*/
 
@@ -175,87 +176,87 @@ void setupGestures() {
     tMLError result;
     result = MLEnableGesture();
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLEnableGesture returned %d\n",result);
+        ALOGE("Fatal error: MLEnableGesture returned %d\n",result);
     }
     result = MLSetGestureCallback(cb_onGesture);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLSetGestureCallback returned %d\n",result);
+        ALOGE("Fatal error: MLSetGestureCallback returned %d\n",result);
     }
     result = MLSetGestures(ML_GESTURE_ALL);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLSetGestures returned %d\n",result);
+        ALOGE("Fatal error: MLSetGestures returned %d\n",result);
     }
 
     result = MLSetTapThreshByAxis(ML_TAP_AXIS_X, params.xTapThreshold);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetTapThreshByAxis returned :%d\n",result);
+        ALOGE("MLSetTapThreshByAxis returned :%d\n",result);
     }
     result = MLSetTapThreshByAxis(ML_TAP_AXIS_Y, params.yTapThreshold);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetTapThreshByAxis returned :%d\n",result);
+        ALOGE("MLSetTapThreshByAxis returned :%d\n",result);
     }
     result = MLSetTapThreshByAxis(ML_TAP_AXIS_Z, params.zTapThreshold);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetTapThreshByAxis returned :%d\n",result);
+        ALOGE("MLSetTapThreshByAxis returned :%d\n",result);
     }
     result = MLSetTapTime(params.tapTime);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetTapTime returned :%d\n",result);
+        ALOGE("MLSetTapTime returned :%d\n",result);
     }
     result = MLSetNextTapTime(params.nextTapTime);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetNextTapTime returned :%d\n",result);
+        ALOGE("MLSetNextTapTime returned :%d\n",result);
     }
     result = MLSetMaxTaps(params.maxTaps);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetMaxTaps returned :%d\n",result);
+        ALOGE("MLSetMaxTaps returned :%d\n",result);
     }
     result = MLSetTapShakeReject(params.shakeRejectValue);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetTapShakeReject returned :%d\n",result);
+        ALOGE("MLSetTapShakeReject returned :%d\n",result);
     }
 
     //Set up shake gesture
     result = MLSetShakeFunc(params.shakeFunction);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetShakeFunc returned :%d\n",result);
+        ALOGE("MLSetShakeFunc returned :%d\n",result);
     }
     result = MLSetShakeThresh(ML_ROLL_SHAKE, params.xShakeThresh);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetShakeThresh returned :%d\n",result);
+        ALOGE("MLSetShakeThresh returned :%d\n",result);
     }
     result = MLSetShakeThresh(ML_PITCH_SHAKE, params.yShakeThresh);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetShakeThresh returned :%d\n",result);
+        ALOGE("MLSetShakeThresh returned :%d\n",result);
     }
     result = MLSetShakeThresh(ML_YAW_SHAKE, params.zShakeThresh);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetShakeThresh returned :%d\n",result);
+        ALOGE("MLSetShakeThresh returned :%d\n",result);
     }
     result = MLSetShakeTime(params.shakeTime);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetShakeTime returned :%d\n",result);
+        ALOGE("MLSetShakeTime returned :%d\n",result);
     }
     result = MLSetNextShakeTime(params.nextShakeTime);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetNextShakeTime returned :%d\n",result);
+        ALOGE("MLSetNextShakeTime returned :%d\n",result);
     }
     result = MLSetMaxShakes(ML_SHAKE_ALL,params.maxShakes);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetMaxShakes returned :%d\n",result);
+        ALOGE("MLSetMaxShakes returned :%d\n",result);
     }
 
     // Yaw rotate settings
     result = MLSetYawRotateTime(params.yawRotateTime);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetYawRotateTime returned :%d\n",result);
+        ALOGE("MLSetYawRotateTime returned :%d\n",result);
     }
     result = MLSetYawRotateThresh(params.yawRotateThreshold);
     if (result != ML_SUCCESS) {
-        LOGE("MLSetYawRotateThresh returned :%d\n",result);
+        ALOGE("MLSetYawRotateThresh returned :%d\n",result);
     }
 
-#define CHK_RES {if(result != ML_SUCCESS) LOGE("unexpected mpl failure %d at line %d",result, __LINE__);}
+#define CHK_RES {if(result != ML_SUCCESS) ALOGE("unexpected mpl failure %d at line %d",result, __LINE__);}
     //Orientation is lumped in with gestures
     result = MLEnableOrientation(); CHK_RES;
     result = MLSetOrientations(ML_ORIENTATION_ALL);CHK_RES;
@@ -373,7 +374,7 @@ void cb_onGesture(gesture_t* gesture)
     }
     break;
     default:
-        LOGE("Unknown Gesture received\n");
+        ALOGE("Unknown Gesture received\n");
         break;
     }
 #endif

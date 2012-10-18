@@ -62,8 +62,8 @@ extern "C" {
 #include "mlFIFO.h"
 
 #define EXTRA_VERBOSE (1)
-#define FUNC_LOG LOGV("%s", __PRETTY_FUNCTION__)
-#define VFUNC_LOG LOGV_IF(EXTRA_VERBOSE, "%s", __PRETTY_FUNCTION__)
+#define FUNC_LOG ALOGV("%s", __PRETTY_FUNCTION__)
+#define VFUNC_LOG ALOGV_IF(EXTRA_VERBOSE, "%s", __PRETTY_FUNCTION__)
 /* this mask must turn on only the sensors that are present and managed by the MPL */
 #ifdef ENABLE_COMPASS
 #define ALL_MPL_SENSORS_NP (ML_THREE_AXIS_ACCEL | ML_THREE_AXIS_COMPASS | ML_THREE_AXIS_GYRO)
@@ -169,7 +169,7 @@ void clearIrqData( bool* irq_set)
             nread = read(cur_fd, &irqdata, sizeof(irqdata));
             if(nread>0) {
                 irq_set[i] = true;
-                //LOGV_IF(EXTRA_VERBOSE, "irq: %d %d (%d)", i, irqdata.interruptcount, j++);
+                //ALOGV_IF(EXTRA_VERBOSE, "irq: %d %d (%d)", i, irqdata.interruptcount, j++);
             }
         }
         s_poll_fds[i].revents=0;
@@ -182,7 +182,7 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
     FUNC_LOG;
     bool irq_set[5] = {false, false, false, false, false};
 
-    LOGV(" enabled_sensors: %d dmp_started: %d", enabled_sensors, dmp_started );
+    ALOGV(" enabled_sensors: %d dmp_started: %d", enabled_sensors, dmp_started );
 
     do {
         if(enabled_sensors & GESTURE_MASK) {
@@ -219,9 +219,9 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
         }
         
         if(s_sys_ped_enabled && local_sensor_mask) {
-            LOGV_IF(EXTRA_VERBOSE, "sys ped enabled -- bringing up DMP + Accel");
+            ALOGV_IF(EXTRA_VERBOSE, "sys ped enabled -- bringing up DMP + Accel");
             local_sensor_mask |= (ML_THREE_AXIS_ACCEL + ML_THREE_AXIS_GYRO);
-            LOGV_IF(EXTRA_VERBOSE, "local_sensor_mask %ld", local_sensor_mask);
+            ALOGV_IF(EXTRA_VERBOSE, "local_sensor_mask %ld", local_sensor_mask);
         }
     } while (0);
 
@@ -239,12 +239,12 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
 
     if ( changing_sensors || restart || start_sys_ped) {
 
-        LOGV_IF(EXTRA_VERBOSE, "cs:%d rs:%d en_ped:%d da_ped:%d en_g:%d da_g:%d", changing_sensors, restart, enable_ped, disable_ped, enable_gest, disable_gest);
+        ALOGV_IF(EXTRA_VERBOSE, "cs:%d rs:%d en_ped:%d da_ped:%d en_g:%d da_g:%d", changing_sensors, restart, enable_ped, disable_ped, enable_gest, disable_gest);
 
         if ((s_ped_state == PED_STANDALONE  || s_ped_state == PED_SLEEP) && restart) {
             unsigned long cursteps;
             unsigned long curwt;
-            LOGV_IF(EXTRA_VERBOSE, "sys ped enabled, restarting, switching to full power ped");
+            ALOGV_IF(EXTRA_VERBOSE, "sys ped enabled, restarting, switching to full power ped");
             MLPedometerStandAloneGetNumOfSteps(&cursteps);
             MLPedometerStandAloneGetWalkTime(&curwt);
             if(s_ped_state == PED_STANDALONE) {
@@ -270,9 +270,9 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
         }
 
         if(sen_mask != MLDLGetCfg()->requested_sensors) {
-            LOGV("MLSetMPUSensors: %lx", sen_mask);
+            ALOGV("MLSetMPUSensors: %lx", sen_mask);
             rv = MLSetMPUSensors(sen_mask);
-            LOGE_IF(rv != ML_SUCCESS, "error: unable to set MPL sensor power states (sens=%ld retcode = %d)", sen_mask, rv);
+            ALOGE_IF(rv != ML_SUCCESS, "error: unable to set MPL sensor power states (sens=%ld retcode = %d)", sen_mask, rv);
         }
 
         if(start_sys_ped) {
@@ -280,16 +280,16 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
         }
 
         if(enable_ped) {
-            LOGV_IF(EXTRA_VERBOSE, "enabling pedometer");
+            ALOGV_IF(EXTRA_VERBOSE, "enabling pedometer");
             s_ped_enabled = true;
             if(!s_sys_ped_enabled) {
-                LOGV_IF(EXTRA_VERBOSE, "sys ped not enabled");
+                ALOGV_IF(EXTRA_VERBOSE, "sys ped not enabled");
                 setupPed_fp();
             }
         } else if(disable_ped) {
-            LOGV_IF(EXTRA_VERBOSE, "disabling pedometer");
+            ALOGV_IF(EXTRA_VERBOSE, "disabling pedometer");
             if(!s_sys_ped_enabled) {
-                LOGV_IF(EXTRA_VERBOSE, "sys ped not enabled");
+                ALOGV_IF(EXTRA_VERBOSE, "sys ped not enabled");
                 MLDisablePedometerFullPower();
                 s_ped_steps = 0;
                 s_ped_wt = 0;
@@ -299,12 +299,12 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
         }
 
         if( enable_gest ) {
-            LOGV_IF(EXTRA_VERBOSE, "enabling gestures");
+            ALOGV_IF(EXTRA_VERBOSE, "enabling gestures");
             setupGestures();
             setupGlyph();
             s_gest_enabled = true;
         } else if(disable_gest) {
-            LOGV_IF(EXTRA_VERBOSE, "disabling gestures");
+            ALOGV_IF(EXTRA_VERBOSE, "disabling gestures");
             MLDisableGlyph();
             MLDisableControl();
             MLDisableOrientation();
@@ -316,7 +316,7 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
           || ( s_use_timerirq_accel && (sen_mask & ML_THREE_AXIS_ACCEL)) )
         {
             if( (sen_mask & ML_DMP_PROCESSOR) == 0) {
-                LOGV_IF(EXTRA_VERBOSE, "Allowing TimerIRQ");
+                ALOGV_IF(EXTRA_VERBOSE, "Allowing TimerIRQ");
                 s_cur_fifo_rate = -1;
                 s_use_timerirq = true;
             }
@@ -325,35 +325,35 @@ void set_power_states(int enabled_sensors, bool start_sys_ped)
                 ioctl(irq_fds.valueFor(TIMERIRQ_FD), TIMERIRQ_STOP, 0);
                 clearIrqData(irq_set);
             }
-            LOGV_IF(EXTRA_VERBOSE, "Not allowing TimerIRQ");
+            ALOGV_IF(EXTRA_VERBOSE, "Not allowing TimerIRQ");
             s_use_timerirq = false;
         }
 
         if (!dmp_started) {
-            LOGV("Starting DMP");
+            ALOGV("Starting DMP");
             rv = MLDmpStart();
-            LOGE_IF(rv != ML_SUCCESS, "unable to start dmp");
+            ALOGE_IF(rv != ML_SUCCESS, "unable to start dmp");
             dmp_started = true;
         }
     }
 
     //check if we should stop the DMP
     if (dmp_started && (sen_mask == 0)) {
-        LOGV("Stopping DMP");
+        ALOGV("Stopping DMP");
         rv = MLDmpStop();
-        LOGE_IF(rv != ML_SUCCESS, "error: unable to stop DMP (retcode = %d)", rv);
+        ALOGE_IF(rv != ML_SUCCESS, "error: unable to stop DMP (retcode = %d)", rv);
         if(s_use_timerirq) {
             ioctl(irq_fds.valueFor(TIMERIRQ_FD), TIMERIRQ_STOP, 0);
         }
         clearIrqData(irq_set);
         if(s_have_good_mpu_cal) {
             rv = MLStoreCalibration();
-            LOGE_IF(rv != ML_SUCCESS, "error: unable to store MPL calibration file");
+            ALOGE_IF(rv != ML_SUCCESS, "error: unable to store MPL calibration file");
             s_have_good_mpu_cal = false;
         }
         
         if(s_sys_ped_enabled && s_ped_state == PED_FULL) {
-            LOGV_IF(EXTRA_VERBOSE, "sys ped enabled, switching to StandAlone mode");
+            ALOGV_IF(EXTRA_VERBOSE, "sys ped enabled, switching to StandAlone mode");
             MLDmpClose();
             MLDmpPedometerStandAloneOpen();
             MLPedometerStandAloneSetNumOfSteps(s_ped_steps);
@@ -385,35 +385,35 @@ void initMPL()
     tMLError result;
 
     if (MLDmpOpen() != ML_SUCCESS) {
-        LOGE("Fatal Error : could not open DMP correctly.\n");
+        ALOGE("Fatal Error : could not open DMP correctly.\n");
     }
 
     result = MLSetMPUSensors(ALL_MPL_SENSORS_NP); //default to all sensors, also makes 9axis enable work
-    LOGE_IF(result != ML_SUCCESS, "Fatal Error : could not set enabled sensors.");
+    ALOGE_IF(result != ML_SUCCESS, "Fatal Error : could not set enabled sensors.");
 
     if(MLLoadCalibration() != ML_SUCCESS) {
-        LOGE("could not open MPL calibration file");
+        ALOGE("could not open MPL calibration file");
     }
 
     if (MLEnable9axisFusion() != ML_SUCCESS) {
-        LOGE("Warning : 9 axis sensor fusion not available - No compass detected.\n");
+        ALOGE("Warning : 9 axis sensor fusion not available - No compass detected.\n");
     }
 
     if (MLSetBiasUpdateFunc(0xFFFF) != ML_SUCCESS) {
-        LOGE("Error : Bias update function could not be set.\n");
+        ALOGE("Error : Bias update function could not be set.\n");
     }
 
     if (MLSetMotionInterrupt(1) != ML_SUCCESS) {
-        LOGE("Error : could not set motion interrupt");
+        ALOGE("Error : could not set motion interrupt");
     }
 
     if (MLSetFifoInterrupt(1) != ML_SUCCESS) {
-        LOGE("Error : could not set fifo interrupt");
+        ALOGE("Error : could not set fifo interrupt");
     }
 
     result = MLSetFIFORate(6);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLSetFIFORate returned %d\n",result);
+        ALOGE("Fatal error: MLSetFIFORate returned %d\n",result);
     }
 
     mpu_accuracy = SENSOR_STATUS_ACCURACY_MEDIUM;
@@ -430,39 +430,39 @@ void setupFIFO()
 
     result = FIFOSendAccel(ML_ALL, ML_32_BIT);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: FIFOSendAccel returned %d\n",result);
+        ALOGE("Fatal error: FIFOSendAccel returned %d\n",result);
     }
 
     result = FIFOSendQuaternion(ML_32_BIT);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: FIFOSendQuaternion returned %d\n",result);
+        ALOGE("Fatal error: FIFOSendQuaternion returned %d\n",result);
     }
 
     result = FIFOSendLinearAccel(ML_ALL, ML_32_BIT);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: FIFOSendLinearAccel returned %d\n",result);
+        ALOGE("Fatal error: FIFOSendLinearAccel returned %d\n",result);
     }
 
     result = FIFOSendLinearAccelWorld (ML_ALL, ML_32_BIT);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: FIFOSendLinearAccelWorld returned %d\n",result);
+        ALOGE("Fatal error: FIFOSendLinearAccelWorld returned %d\n",result);
     }
 
     result = FIFOSendGravity(ML_ALL, ML_32_BIT);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: FIFOSendGravity returned %d\n",result);
+        ALOGE("Fatal error: FIFOSendGravity returned %d\n",result);
     }
 
     result = FIFOSendGyro(ML_ALL, ML_32_BIT);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: FIFOSendGyro returned %d\n",result);
+        ALOGE("Fatal error: FIFOSendGyro returned %d\n",result);
     }
 
 }
 
 void cb_onStep_fp(unsigned long val, unsigned long wtime)
 {
-    LOGV_IF(EXTRA_VERBOSE, "onStep cb %ld %ld", val, wtime);
+    ALOGV_IF(EXTRA_VERBOSE, "onStep cb %ld %ld", val, wtime);
     s_ped_steps = val;
 #ifdef ENABLE_GESTURE_MANAGER
     if (*s_enabledMask & (1 << MPLSensor::Step)) {
@@ -471,7 +471,7 @@ void cb_onStep_fp(unsigned long val, unsigned long wtime)
         ((int*) (output_gesture_list[MPLSensor::Step].data))[1] = wtime;
         output_gesture_list[MPLSensor::Step].sensor = MPLSensor::Step;
         *s_pendingMask |= (1 << MPLSensor::Step);
-        LOGD("stored STEP");
+        ALOGD("stored STEP");
     }
 #endif
 }
@@ -484,15 +484,15 @@ void setupPed_fp()
     s_ped_state = PED_FULL;
 
     if(s_cur_fifo_rate > 9) {
-        LOGV_IF(EXTRA_VERBOSE, "need to adjust fifo rate (cur = %d)", s_cur_fifo_rate);
+        ALOGV_IF(EXTRA_VERBOSE, "need to adjust fifo rate (cur = %d)", s_cur_fifo_rate);
         result = MLSetFIFORate(6);
-        LOGE_IF(result != ML_SUCCESS, "setupPed_fp : failed to adjust fifo rate");
+        ALOGE_IF(result != ML_SUCCESS, "setupPed_fp : failed to adjust fifo rate");
         s_cur_fifo_rate = 6;
     }
 
     result = MLEnablePedometerFullPower();
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLEnablePedometerFullPower returned %d\n",result);
+        ALOGE("Fatal error: MLEnablePedometerFullPower returned %d\n",result);
     }
 
     s_step_params.threshold = 25000000L;
@@ -505,18 +505,18 @@ void setupPed_fp()
 
     result = MLSetPedometerFullPowerParams(&s_step_params);
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLSetPedometerFullPowerParams returned %d\n",result);
+        ALOGE("Fatal error: MLSetPedometerFullPowerParams returned %d\n",result);
     }
 
     result = MLSetPedometerFullPowerStepCallback( cb_onStep_fp );
     if (result != ML_SUCCESS) {
-        LOGE("Fatal error: MLSetPedometerFullPowerStepCallback returned %d\n",result);
+        ALOGE("Fatal error: MLSetPedometerFullPowerStepCallback returned %d\n",result);
     }
 
     result = MLSetPedometerFullPowerStepCount(s_ped_steps);
     result = MLSetPedometerFullPowerWalkTime(s_ped_wt);
 
-    LOGE_IF(result != ML_SUCCESS, "Fatal error: MLSetPedometerFullPowerStepCount failed (%d)", result);
+    ALOGE_IF(result != ML_SUCCESS, "Fatal error: MLSetPedometerFullPowerStepCount failed (%d)", result);
 }
 
 /**
@@ -526,12 +526,12 @@ void setupCallbacks()
 {
     FUNC_LOG;
     if (MLSetMotionCallback(cb_onMotion) != ML_SUCCESS) {
-        LOGE("Error : Motion callback could not be set.\n");
+        ALOGE("Error : Motion callback could not be set.\n");
 
     }
 
     if (MLSetProcessedDataCallback(cb_procData) != ML_SUCCESS) {
-        LOGE("Error : Processed data callback could not be set.");
+        ALOGE("Error : Processed data callback could not be set.");
 
     }
 }
@@ -567,7 +567,7 @@ void cb_procData()
 {
     new_data = 1;
     sampleCount++;
-    //LOGV_IF(EXTRA_VERBOSE, "new data (%d)", sampleCount);
+    //ALOGV_IF(EXTRA_VERBOSE, "new data (%d)", sampleCount);
 }
 
 //these handlers transform mpl data into one of the Android sensor types
@@ -595,7 +595,7 @@ void accel_handler(sensors_event_t* s, uint32_t* pending_mask, int index)
     s->acceleration.v[0] = s->acceleration.v[0] * 9.81;
     s->acceleration.v[1] = s->acceleration.v[1] * 9.81;
     s->acceleration.v[2] = s->acceleration.v[2] * 9.81;
-    //LOGV_IF(EXTRA_VERBOSE, "accel data: %f %f %f", s->acceleration.v[0], s->acceleration.v[1], s->acceleration.v[2]);
+    //ALOGV_IF(EXTRA_VERBOSE, "accel data: %f %f %f", s->acceleration.v[0], s->acceleration.v[1], s->acceleration.v[2]);
     s->acceleration.status = SENSOR_STATUS_ACCURACY_HIGH;
     if (res == ML_SUCCESS)
         *pending_mask |= (1 << index);
@@ -622,7 +622,7 @@ int estimate_compass_accuracy() {
             rv = SENSOR_STATUS_ACCURACY_HIGH;
         }
     } else {
-        LOGE("could not get mag bias error");
+        ALOGE("could not get mag bias error");
         rv = SENSOR_STATUS_ACCURACY_LOW;
     }
 
@@ -640,7 +640,7 @@ void compass_handler(sensors_event_t* s, uint32_t* pending_mask, int index)
     res = MLGetFloatArray(ML_MAGNETOMETER, s->magnetic.v);
 
     if (res != ML_SUCCESS) {
-        LOGD("compass_handler MLGetFloatArray(ML_MAGNETOMETER) returned %d", res);
+        ALOGD("compass_handler MLGetFloatArray(ML_MAGNETOMETER) returned %d", res);
     }
 
     s->magnetic.status = estimate_compass_accuracy();
@@ -764,7 +764,7 @@ void orien_handler(sensors_event_t* s, uint32_t* pending_mask, int index) //note
     if ((r1 == ML_SUCCESS) && (r2 == ML_SUCCESS))
         *pending_mask |= (1 << index);
     else
-        LOGD("orien_handler: data not valid (%d %d)", (int)r1, (int)r2);
+        ALOGD("orien_handler: data not valid (%d %d)", (int)r1, (int)r2);
 
 }
 
@@ -785,7 +785,7 @@ MPLSensor::MPLSensor() :
     int mpu_int_fd, i;
     char *port = NULL;
 	
-    LOGV_IF(EXTRA_VERBOSE, "MPLSensor constructor: numSensors = %d", numSensors);
+    ALOGV_IF(EXTRA_VERBOSE, "MPLSensor constructor: numSensors = %d", numSensors);
     log_sys_api_addr();
 
     mForceSleep = false;
@@ -807,7 +807,7 @@ MPLSensor::MPLSensor() :
 
     mpu_int_fd = open("/dev/mpuirq", O_RDWR);
     if (mpu_int_fd == -1) {
-        LOGE("could not open the mpu irq device node");
+        ALOGE("could not open the mpu irq device node");
     } else {
         fcntl(mpu_int_fd, F_SETFL, O_NONBLOCK);
         //ioctl(mpu_int_fd, MPUIRQ_SET_TIMEOUT, 0);
@@ -818,7 +818,7 @@ MPLSensor::MPLSensor() :
 
     accel_fd = open("/dev/accelirq", O_RDWR);
     if(accel_fd == -1) {
-        LOGE("could not open the accel irq device node");
+        ALOGE("could not open the accel irq device node");
     } else {
         fcntl(accel_fd, F_SETFL, O_NONBLOCK);
         //ioctl(accel_fd, SLAVEIRQ_SET_TIMEOUT, 0);
@@ -829,7 +829,7 @@ MPLSensor::MPLSensor() :
 
     timer_fd = open("/dev/timerirq", O_RDWR);
     if(timer_fd == -1) {
-        LOGE("could not open the timer irq device node");
+        ALOGE("could not open the timer irq device node");
     } else {
         fcntl(timer_fd, F_SETFL, O_NONBLOCK);
         //ioctl(timer_fd, TIMERIRQ_SET_TIMEOUT, 0);
@@ -843,7 +843,7 @@ MPLSensor::MPLSensor() :
     if((accel_fd == -1) && (timer_fd != -1)) {
         //no accel irq and timer available
         s_use_timerirq_accel = true;
-        LOGD("MPLSensor falling back to timerirq for accel data");
+        ALOGD("MPLSensor falling back to timerirq for accel data");
     }
 
     memset(mPendingEvents, 0, sizeof(mPendingEvents));
@@ -956,7 +956,7 @@ MPLSensor::MPLSensor() :
     s_pendingMask = &mPendingMask;
 
     if (MLSerialOpen(port) != ML_SUCCESS) {
-        LOGE("Fatal Error : could not open MPL serial interface");
+        ALOGE("Fatal Error : could not open MPL serial interface");
     }
     
     //initialize library parameters
@@ -967,7 +967,7 @@ MPLSensor::MPLSensor() :
 
     //we start the motion processing only when a sensor is enabled...
     //rv = MLDmpStart();
-    //LOGE_IF(rv != ML_SUCCESS, "Fatal error: could not start the DMP correctly. (code = %d)\n", rv);
+    //ALOGE_IF(rv != ML_SUCCESS, "Fatal error: could not start the DMP correctly. (code = %d)\n", rv);
     //dmp_started = true;
 
     pthread_mutex_unlock(&mpld_mutex);
@@ -979,15 +979,15 @@ MPLSensor::~MPLSensor()
     FUNC_LOG;
     pthread_mutex_lock(&mpld_mutex);
     if (MLDmpStop() != ML_SUCCESS) {
-        LOGD("Error: could not stop the DMP correctly.\n");
+        ALOGD("Error: could not stop the DMP correctly.\n");
     }
 
     if (MLDmpClose() != ML_SUCCESS) {
-        LOGD("Error: could not close the DMP");
+        ALOGD("Error: could not close the DMP");
     }
 
     if (MLSerialClose() != ML_SUCCESS) {
-        LOGD("Error : could not close the serial port");
+        ALOGD("Error : could not close the serial port");
     }
     pthread_mutex_unlock(&mpld_mutex);
 }
@@ -995,7 +995,7 @@ MPLSensor::~MPLSensor()
 int MPLSensor::enable(int32_t handle, int en)
 {
     FUNC_LOG;
-    LOGV("handle : %d en: %d", handle, en);
+    ALOGV("handle : %d en: %d", handle, en);
 
     int what = -1;
 
@@ -1031,7 +1031,7 @@ int MPLSensor::enable(int32_t handle, int en)
 
     int newState = en ? 1 : 0;
     int err = 0;
-    LOGV_IF((uint32_t(newState) << what) != (mEnabled & (1 << what)), "sensor state change what=%d",what);
+    ALOGV_IF((uint32_t(newState) << what) != (mEnabled & (1 << what)), "sensor state change what=%d",what);
 
 
     pthread_mutex_lock(&mpld_mutex);
@@ -1040,7 +1040,7 @@ int MPLSensor::enable(int32_t handle, int en)
         short flags = newState;
         mEnabled &= ~(1 << what);
         mEnabled |= (uint32_t(flags) << what);
-        LOGV_IF(EXTRA_VERBOSE, "mEnabled = %x", mEnabled);
+        ALOGV_IF(EXTRA_VERBOSE, "mEnabled = %x", mEnabled);
         set_power_states(mEnabled, false);
         pthread_mutex_unlock(&mpld_mutex);
         update_delay();
@@ -1053,7 +1053,7 @@ int MPLSensor::enable(int32_t handle, int en)
 int MPLSensor::setDelay(int32_t handle, int64_t ns)
 {
     FUNC_LOG;
-    LOGV_IF(EXTRA_VERBOSE, " setDelay handle: %d rate %d", handle, (int)(ns/1000000LL));
+    ALOGV_IF(EXTRA_VERBOSE, " setDelay handle: %d rate %d", handle, (int)(ns/1000000LL));
     int what = -1;
     switch (handle) {
     case ID_A:
@@ -1126,10 +1126,10 @@ int MPLSensor::update_delay()
         }
 
         if(dmp_started && (rate != s_cur_fifo_rate)) {
-            LOGV("set fifo rate: %d %llu", rate, wanted);
+            ALOGV("set fifo rate: %d %llu", rate, wanted);
             tMLError res = MLDmpStop();
             res = MLSetFIFORate(rate);
-            LOGE_IF(res != ML_SUCCESS, "error setting FIFO rate");
+            ALOGE_IF(res != ML_SUCCESS, "error setting FIFO rate");
             if(((MLDLGetCfg()->requested_sensors & ML_DMP_PROCESSOR) == 0) ) {
                 SetSampleStepSizeMs(wanted/1000000LLU);
                 res = MLSetMPUSensors(MLDLGetCfg()->requested_sensors);
@@ -1138,10 +1138,10 @@ int MPLSensor::update_delay()
                     clearIrqData(irq_set);
                     if(MLDLGetCfg()->requested_sensors == ML_THREE_AXIS_COMPASS) {
                         ioctl(irq_fds.valueFor(TIMERIRQ_FD), TIMERIRQ_START, (unsigned long)(wanted/1000000LLU));
-                        LOGV_IF(EXTRA_VERBOSE, "updated timerirq period to %d", (int)(wanted/1000000LLU));
+                        ALOGV_IF(EXTRA_VERBOSE, "updated timerirq period to %d", (int)(wanted/1000000LLU));
                     }else{
                         ioctl(irq_fds.valueFor(TIMERIRQ_FD), TIMERIRQ_START, (unsigned long)GetSampleStepSizeMs());
-                        LOGV_IF(EXTRA_VERBOSE, "updated timerirq period to %d", (int)GetSampleStepSizeMs());
+                        ALOGV_IF(EXTRA_VERBOSE, "updated timerirq period to %d", (int)GetSampleStepSizeMs());
                     }
                 }
             } else {
@@ -1149,7 +1149,7 @@ int MPLSensor::update_delay()
             }
             
             res = MLDmpStart();
-            LOGE_IF(res != ML_SUCCESS, "error re-starting DMP");
+            ALOGE_IF(res != ML_SUCCESS, "error re-starting DMP");
 
             s_cur_fifo_rate = rate;
             rv = (res == ML_SUCCESS);
@@ -1167,7 +1167,7 @@ static int64_t now_ns(void)
     struct timespec ts;
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    //LOGV("Time %lld", (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec);
+    //ALOGV("Time %lld", (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec);
     return (int64_t) ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
 
@@ -1187,40 +1187,40 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
 
     pthread_mutex_lock(&mpld_mutex);
     if(dmp_started) {
-        //LOGV_IF(EXTRA_VERBOSE, "Update Data");
+        //ALOGV_IF(EXTRA_VERBOSE, "Update Data");
         rv = MLUpdateData();
-        LOGE_IF(rv != ML_SUCCESS, "MLUpdateData error (code %d)", (int)rv);
+        ALOGE_IF(rv != ML_SUCCESS, "MLUpdateData error (code %d)", (int)rv);
     } else if(s_ped_state == PED_SLEEP || s_ped_state == PED_STANDALONE){
-        LOGV_IF(EXTRA_VERBOSE, "Possible Ped event");
+        ALOGV_IF(EXTRA_VERBOSE, "Possible Ped event");
         int idx = irq_fds.indexOfKey(ACCELIRQ_FD);
-        LOGE_IF(idx < 1, "ERROR -- accel irq not present.  pedometer will not function");
+        ALOGE_IF(idx < 1, "ERROR -- accel irq not present.  pedometer will not function");
 /* -- KLP removed until accel can wakeup AP
         if(s_ped_state == PED_SLEEP && irq_set[ACCELIRQ_FD] ) {
             //accel int -- turn ped back on
-            LOGV_IF(EXTRA_VERBOSE, "motion int -- turn ped back on");
+            ALOGV_IF(EXTRA_VERBOSE, "motion int -- turn ped back on");
             tMLError e = MLPedometerStandAloneSetNumOfSteps(s_ped_steps);
-            LOGE_IF(e != ML_SUCCESS, "failed to reset step count in Standalone Pedometer on motion int");
+            ALOGE_IF(e != ML_SUCCESS, "failed to reset step count in Standalone Pedometer on motion int");
             MLPedometerStandAloneSetWalkTime(s_ped_wt);
             e = MLDmpPedometerStandAloneStart();
-            LOGE_IF(e != ML_SUCCESS, "failed to restart standalone pedometer on motion int");
+            ALOGE_IF(e != ML_SUCCESS, "failed to restart standalone pedometer on motion int");
             s_ped_state = PED_STANDALONE;
         } else if (s_ped_state == PED_STANDALONE && irq_set[ACCELIRQ_FD] ) {
-            LOGV_IF(EXTRA_VERBOSE, "no-motion int -- sleep sensors");
+            ALOGV_IF(EXTRA_VERBOSE, "no-motion int -- sleep sensors");
             //accel int -- switch to sleep
             tMLError e = MLDmpPedometerStandAloneStop();
-            LOGE_IF(e != ML_SUCCESS, "failed to sleep pedometer on no-motion event");
+            ALOGE_IF(e != ML_SUCCESS, "failed to sleep pedometer on no-motion event");
             s_ped_state = PED_SLEEP;
         }
 */
     } else {
         //probably just one extra read after shutting down
-        LOGV_IF(EXTRA_VERBOSE, "MPLSensor::readEvents called, but there's nothing to do.");
+        ALOGV_IF(EXTRA_VERBOSE, "MPLSensor::readEvents called, but there's nothing to do.");
     }
 
     pthread_mutex_unlock(&mpld_mutex);
 
     if (!new_data) {
-        LOGV_IF(EXTRA_VERBOSE, "no new data");
+        ALOGV_IF(EXTRA_VERBOSE, "no new data");
         return 0;
     }
     new_data = 0;
@@ -1251,26 +1251,26 @@ int MPLSensor::readEvents(sensors_event_t* data, int count)
 
 int MPLSensor::getFd() const
 {
-    LOGV("MPLSensor::getFd returning %d", data_fd);
+    ALOGV("MPLSensor::getFd returning %d", data_fd);
     return data_fd;
 }
 
 int MPLSensor::getAccelFd() const
 {
-    LOGV("MPLSensor::getAccelFd returning %d", accel_fd);
+    ALOGV("MPLSensor::getAccelFd returning %d", accel_fd);
     return accel_fd;
 }
 
 int MPLSensor::getTimerFd() const
 {
-    LOGV("MPLSensor::getTimerFd returning %d", timer_fd);
+    ALOGV("MPLSensor::getTimerFd returning %d", timer_fd);
     return timer_fd;
 }
 
 int MPLSensor::getPowerFd() const
 {
     int hdl = (int)MLSerialGetHandle();
-    LOGV("MPLSensor::getPowerFd returning %d", hdl);
+    ALOGV("MPLSensor::getPowerFd returning %d", hdl);
     return hdl;
 }
     
@@ -1333,15 +1333,15 @@ int getBiases(float *b)
     FUNC_LOG;
     int rv;
     float err[3];
-    LOGV("get biases\n");
+    ALOGV("get biases\n");
     pthread_mutex_lock(&mpld_mutex);
     rv = MLGetFloatArray(ML_ACCEL_BIAS, b);
     rv += MLGetFloatArray(ML_GYRO_BIAS, &(b[3]));
     rv += MLGetFloatArray(ML_MAG_BIAS, &(b[6]));
     MLGetFloatArray(ML_MAG_BIAS_ERROR, err);
     pthread_mutex_unlock(&mpld_mutex);
-    LOGV("rpcGetBiases: %f %f %f - %f %f %f - %f %f %f", b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]);
-    LOGV("rpcGetBiases: %f %f %f", err[0], err[1], err[2]);
+    ALOGV("rpcGetBiases: %f %f %f - %f %f %f - %f %f %f", b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8]);
+    ALOGV("rpcGetBiases: %f %f %f", err[0], err[1], err[2]);
     return rv;
 }
 
@@ -1363,7 +1363,7 @@ int setBiasUpdateFunc(long f)
     int rv;
     pthread_mutex_lock(&mpld_mutex);
     rv = MLSetBiasUpdateFunc((unsigned short) f);
-    LOGE_IF(rv!=ML_SUCCESS, "SysApi :: setBiasUpdateFunc failed (f=%lx rv=%d)", f, rv);
+    ALOGE_IF(rv!=ML_SUCCESS, "SysApi :: setBiasUpdateFunc failed (f=%lx rv=%d)", f, rv);
     pthread_mutex_unlock(&mpld_mutex);
     return rv;
 }
@@ -1376,7 +1376,7 @@ int setSensors(long s)
     pthread_mutex_lock(&mpld_mutex);
     master_sensor_mask = s;
     rv = MLSetMPUSensors(s & local_sensor_mask);
-    LOGE_IF(rv!=ML_SUCCESS, "SysApi :: setSensors MLSetMPUSensors failed (s=%lx rv=%d)", (s&local_sensor_mask), rv);
+    ALOGE_IF(rv!=ML_SUCCESS, "SysApi :: setSensors MLSetMPUSensors failed (s=%lx rv=%d)", (s&local_sensor_mask), rv);
     pthread_mutex_unlock(&mpld_mutex);
     return rv;
 }
@@ -1410,12 +1410,12 @@ int selfTest()
     do {
         rv = MLSelfTestSetAccelZOrient(1); //accel z is inverted
         if (rv != ML_SUCCESS) {
-            LOGE("error MLSelfTestSetAccelZOrient returned %d", rv);
+            ALOGE("error MLSelfTestSetAccelZOrient returned %d", rv);
             break;
         }
         rv = MLSelfTestRun();
         if (rv != ML_SUCCESS) {
-            LOGE("error MLSelfTestRun returned %d", rv);
+            ALOGE("error MLSelfTestRun returned %d", rv);
             break;
         }
     } while (0);
@@ -1438,8 +1438,8 @@ tMplSysApi mplSysApi = { getBiases, setBiases, setBiasUpdateFunc, setSensors,
 
 void log_sys_api_addr()
 {
-    LOGV("sysapi object at %p", &mplSysApi);
-    LOGV("  sysapi getBiases func at %p", getBiases);
+    ALOGV("sysapi object at %p", &mplSysApi);
+    ALOGV("  sysapi getBiases func at %p", getBiases);
 }
 
 
@@ -1573,7 +1573,7 @@ int startPed(void) {
     pthread_mutex_lock(&mpld_mutex);
     if(*s_enabledMask == 0 && s_ped_state == PED_NONE) {
         //all sensors off and no ped running
-        LOGV_IF(EXTRA_VERBOSE, "sys starting standalone pedometer");
+        ALOGV_IF(EXTRA_VERBOSE, "sys starting standalone pedometer");
         MLDmpClose();
         MLDmpPedometerStandAloneOpen();
         MLPedometerStandAloneSetNumOfSteps(0);
@@ -1589,7 +1589,7 @@ int startPed(void) {
         s_ped_state = PED_STANDALONE;
         s_sys_ped_enabled= true;
     } else if (s_ped_state == PED_NONE) {
-        LOGV_IF(EXTRA_VERBOSE, "sys starting fullpower pedometer");
+        ALOGV_IF(EXTRA_VERBOSE, "sys starting fullpower pedometer");
         s_sys_ped_enabled = true;
         s_ped_state = PED_FULL;
         set_power_states(*s_enabledMask, true);
@@ -1606,12 +1606,12 @@ int stopPed(void) {
     pthread_mutex_lock(&mpld_mutex);
     
     if(s_ped_state == PED_STANDALONE) {
-        LOGV_IF(EXTRA_VERBOSE, "sys stopping standalone pedometer");
+        ALOGV_IF(EXTRA_VERBOSE, "sys stopping standalone pedometer");
         MLDmpPedometerStandAloneStop();
     }
 
     if(s_ped_state == PED_SLEEP || s_ped_state == PED_STANDALONE) {
-        LOGV_IF(EXTRA_VERBOSE && s_ped_state == PED_SLEEP, "sys ped was asleep");
+        ALOGV_IF(EXTRA_VERBOSE && s_ped_state == PED_SLEEP, "sys ped was asleep");
         MLDmpPedometerStandAloneClose();
         s_ped_state = PED_NONE;
         s_ped_steps = 0;
@@ -1621,7 +1621,7 @@ int stopPed(void) {
     }
     
     if(s_ped_state == PED_FULL && !s_ped_enabled) {
-        LOGV_IF(EXTRA_VERBOSE, "sys stopping full power pedometer");
+        ALOGV_IF(EXTRA_VERBOSE, "sys stopping full power pedometer");
         MLDisablePedometerFullPower();
         s_ped_state = PED_NONE;
         s_ped_steps = 0;
@@ -1653,7 +1653,7 @@ int getSteps(void) {
     }
 
     pthread_mutex_unlock(&mpld_mutex);
-    LOGV_IF(EXTRA_VERBOSE, "getSteps returning %d", (int)steps);
+    ALOGV_IF(EXTRA_VERBOSE, "getSteps returning %d", (int)steps);
     return (int)steps;
 }
 
