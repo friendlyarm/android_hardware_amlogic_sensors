@@ -34,7 +34,7 @@
 
 #include "sensors.h"
 
-#include "Gsensor.h"
+#include "GSensor.h"
 #include "LightSensor.h"
 
 /*****************************************************************************/

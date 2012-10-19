@@ -35,7 +35,7 @@
 #endif
 #include <cutils/log.h>
 
-#include "Gsensor.h"
+#include "GSensor.h"
 
 
 
