@@ -107,6 +107,7 @@ const static struct sensor_config supported_sensors[] =
 		{"mma7660", AML_SENSOR_TYPE_GRAVITY, {{mma7660_filter, 21.0f}}},
 		{"mma8452", AML_SENSOR_TYPE_GRAVITY, {{0, 720.0f}}},
 		{"dmard06", AML_SENSOR_TYPE_GRAVITY, {{0, 32.0f}}},
+		{"afa750", AML_SENSOR_TYPE_GRAVITY, {{0, 4096.0f}}},
 
 		//This should  always be the last node of this array, don't touch.
 		{NULL, AML_SENSOR_TYPE_NONE, {{0, 0}}},	
@@ -114,7 +115,7 @@ const static struct sensor_config supported_sensors[] =
 
 const static struct sensor_config dummy_sensors[] =
 {
-		{(const char *)dummy_gsensor_name, AML_SENSOR_TYPE_GRAVITY, {{0, 256.0f}}},
+		{(const char *)dummy_gsensor_name, AML_SENSOR_TYPE_GRAVITY, {{0, 9.8f}}},
 
 };
 
@@ -143,5 +144,16 @@ void set_dummy_sensor_name(enum sensor_type s_type, const char *name)
 		char *name_stripped = const_cast<char *> (config->name);
 		ALOGD("Coping dummy name %s\n",name);
 		strncpy(name_stripped, name, 80);	
+	}
+}
+
+void set_dummy_gsensor_cfg(const struct gsensor_config *gs_cfg)
+{
+	const struct sensor_config *config = get_dummy_sensor_cfg(AML_SENSOR_TYPE_GRAVITY);
+	if(config)
+	{
+		struct gsensor_config *cfg = const_cast<struct gsensor_config *> (&config->config.gs_config);
+		ALOGD("Configuring dummy gsensor\n");
+		*cfg = *gs_cfg;
 	}
 }

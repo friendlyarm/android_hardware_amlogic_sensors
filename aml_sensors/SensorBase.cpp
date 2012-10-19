@@ -210,7 +210,7 @@ int SensorBase::probeInput(enum sensor_type s_type)
 			else
 			{
 				int type_match = 0;
-				switch(s_type)
+				switch(s_type)	//TODO: This is ugly, make it a virtual function.
 				{
 					case AML_SENSOR_TYPE_GRAVITY :
 					if(bits & (1UL<<ABS_X) && bits & (1UL<<ABS_Y) && (1UL<<ABS_Z))

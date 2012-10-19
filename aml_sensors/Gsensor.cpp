@@ -341,8 +341,25 @@ int GSensor:: readEvents(sensors_event_t* data, int count) {
             data->type = SENSOR_TYPE_ACCELEROMETER;
             data->acceleration.status = SENSOR_STATUS_ACCURACY_HIGH;
             data->version = sizeof(sensors_event_t);
+
+			if(using_dummy && sensor_cfg->config.gs_config.LSG == 9.8f)
+			{
+				gsensor_config gs_cfg = {0, 0};
+				float x = data->acceleration.x;
+				float y = data->acceleration.y;
+				float z = data->acceleration.z;
+				gs_cfg.LSG = sqrt(x*x + y*y + z*z);
+				ALOGD("Caculated LSG : %f", gs_cfg.LSG);
+				if(gs_cfg.LSG > 2)
+				{
+					set_dummy_gsensor_cfg(&gs_cfg);
+				}
+				
+            	data->acceleration.status = SENSOR_STATUS_UNRELIABLE;
+			}
+
+	
 			
-		
 #ifdef DEBUG_SENSOR
     	    ALOGD("Sensor data: t x,y,x: %f %f, %f, %f\n",
     			data->timestamp / 1000000000.0,
