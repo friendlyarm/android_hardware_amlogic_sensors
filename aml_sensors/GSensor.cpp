@@ -115,138 +115,13 @@ static int set_sysfs_input_attr(char *class_path,
 	return 0;
 }
 
-#ifdef SENSOR_NAME
-static int sensor_get_class_path(char *des)
-{
-    char *dirname = "/sys/class/input";
-    char buf[256];
-    char class_path[PATH_MAX];
-    
-    int res;
-    DIR *dir;
-    struct dirent *de;
-    int fd = -1;
-    int found = 0;
-
-    dir = opendir(dirname);
-    if (dir == NULL)
-    	return -1;
-
-	while((de = readdir(dir))) {
-		if (strncmp(de->d_name, "input", strlen("input")) != 0) {
-		    continue;
-        	}
-
-		sprintf(class_path, "%s/%s", dirname, de->d_name);
-		snprintf(buf, sizeof(buf), "%s/name", class_path);
-
-		fd = open(buf, O_RDONLY);
-		if (fd < 0) {
-		    continue;
-		}
-		if ((res = read(fd, buf, sizeof(buf))) < 0) {
-		    close(fd);
-		    continue;
-		}
-		buf[res - 1] = '\0';
-		if (strcmp(buf, SENSOR_NAME) == 0) {
-		    found = 1;
-		    close(fd);
-		    break;
-		}
-
-		close(fd);
-		fd = -1;
-	}
-	closedir(dir);
-
-    if (found) {
-        snprintf(des, PATH_MAX, "%s", class_path);
-        return 0;
-    }else {
-        return -1;
-    }
-
-}
-#endif
-
-static int sensor_get_class_path(char *des, const char *name)
-{
-    const char *dirname = "/sys/class/input";
-    char buf[256];
-    char class_path[PATH_MAX];
-    
-    int res;
-    DIR *dir;
-    struct dirent *de;
-    int fd = -1;
-    int found = 0;
-
-	if(!name)
-		return -1;
-
-    dir = opendir(dirname);
-    if (dir == NULL)
-    	return -1;
-
-	while((de = readdir(dir))) {
-		if (strncmp(de->d_name, "input", strlen("input")) != 0) {
-		    continue;
-        	}
-
-		sprintf(class_path, "%s/%s", dirname, de->d_name);
-		snprintf(buf, sizeof(buf), "%s/name", class_path);
-
-		fd = open(buf, O_RDONLY);
-		if (fd < 0) {
-		    continue;
-		}
-		if ((res = read(fd, buf, sizeof(buf))) < 0) {
-		    close(fd);
-		    continue;
-		}
-		buf[res - 1] = '\0';
-		if (strcmp(buf, name) == 0) {
-		    found = 1;
-		    close(fd);
-		    break;
-		}
-
-		close(fd);
-		fd = -1;
-	}
-	closedir(dir);
-
-    if (found) {
-        snprintf(des, PATH_MAX, "%s", class_path);
-        return 0;
-    }else {
-        return -1;
-    }
-
-}
-
-
 
 GSensor::GSensor() :
-    SensorBase(NULL, AML_SENSOR_TYPE_GRAVITY),
+    SensorBase(NULL),
     mEnabled(0)
 {
     m_gspos = acc_aml_get_install_dir();
 
-#ifdef SENSOR_NAME	
-    if(0> sensor_get_class_path(class_path) ){
-        ALOGE("failed to sensor_get_class_path!!");
-        return ;
-    }
-#else
-    if(!sensor_cfg || (0> sensor_get_class_path(class_path, sensor_cfg->name))){
-        ALOGE("failed to sensor_get_class_path!!");
-        return ;
-    }
-#endif
-
-    ALOGD("dgt GSensor:m_gspos=%d,class_path is %s \n", m_gspos, class_path);
 }
 
 GSensor:: ~GSensor()
@@ -375,4 +250,35 @@ int GSensor:: readEvents(sensors_event_t* data, int count) {
     return 0;
 }
 
+/* 
+ * Probe a sensor's type via its event bit. 
+ * A sensor with ABS_X, ABS_Y and ABS_Z bits set is considered a gravity sensor.
+ * fd: File descriptor of a /dev/input/event node.
+ * Returns true if the event node accords with sensor type.
+ */
+bool GSensor::probeSensorType(int fd) {
+	unsigned long bits;
+	if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(bits)), &bits) <= 0) 
+	{
+		ALOGE("Get ABS event bit failed. \n");
+	}
+	else
+	{
+		if(bits & (1UL<<ABS_X) && bits & (1UL<<ABS_Y) && (1UL<<ABS_Z))
+			return true;
+	}
+	return false;
+}
 
+const struct sensor_config* GSensor::getDummySensorConfig() {
+	return get_dummy_sensor_cfg(AML_SENSOR_TYPE_GRAVITY);
+}
+
+void GSensor::setDummySensorName(const char *name) {
+	set_dummy_sensor_name(AML_SENSOR_TYPE_GRAVITY, name);
+}
+
+enum sensor_type GSensor::getSensorType()
+{
+	return AML_SENSOR_TYPE_GRAVITY;
+}

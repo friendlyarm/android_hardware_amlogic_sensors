@@ -35,11 +35,12 @@ protected:
     char        class_path[PATH_MAX];
     int         dev_fd;
     int         data_fd;
-	int using_dummy;
+
 	const struct sensor_config *sensor_cfg;
+	int using_dummy;
 
     int openInput(const char* inputName);
-    int probeInput(enum sensor_type s_type);
+    int probeInput();
     static int64_t getTimestamp();
 
 
@@ -50,20 +51,26 @@ protected:
     int open_device();
     int close_device();
 
+	/* ALl sensors must provide a method to prode its type */
+	virtual bool probeSensorType(int fd) = 0;
+	virtual enum sensor_type getSensorType() = 0;
+	virtual void setDummySensorName(const char *name) = 0;
+	virtual const struct sensor_config *getDummySensorConfig()= 0;
 public:
             SensorBase(
                     const char* dev_name,
                     const char* data_name);
 
-	SensorBase(
-        	const char* dev_name,
-		enum sensor_type s_type);
+	SensorBase(const char* dev_name);
 
+	static int getClassPath(char *des, const char *name);
+
+	int initialize();
     virtual ~SensorBase();
 
     virtual int readEvents(sensors_event_t* data, int count) = 0;
     virtual bool hasPendingEvents() const;
-    virtual int getFd() const;
+    virtual int getFd();
     virtual int getPollTime() { return -1; }
     virtual int setDelay(int32_t handle, int64_t ns);
     virtual int enable(int32_t handle, int enabled) = 0;

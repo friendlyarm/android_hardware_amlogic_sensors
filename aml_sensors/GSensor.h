@@ -20,6 +20,13 @@ public:
     virtual int enable(int32_t handle, int enabled);
     virtual int readEvents(sensors_event_t *data, int count);
     virtual int getFd() const;
+
+protected: 
+
+	virtual bool probeSensorType(int fd);
+	virtual void setDummySensorName(const char *name);
+	virtual enum sensor_type getSensorType();
+	virtual const struct sensor_config* getDummySensorConfig();
    // virtual int getPollTime();
 private:
     int accel_fd;

@@ -51,14 +51,10 @@ SensorBase::SensorBase(
     }
 }
 
-SensorBase::SensorBase(
-        const char* dev_name,
-	enum sensor_type s_type)
-    : dev_name(dev_name),
-      dev_fd(-1), data_fd(-1), sensor_cfg(NULL), using_dummy(0)
+SensorBase::SensorBase(const char* dev_name)
+    : dev_name(dev_name), dev_fd(-1), data_fd(-1), sensor_cfg(NULL), using_dummy(0)
 {
-	printf("Aml sensor hal, about to probeInput\n");
-	data_fd = probeInput(s_type);	
+	ALOGD("Aml sensor hal, about to probeInput\n");
 }
 
 SensorBase::~SensorBase() {
@@ -86,8 +82,7 @@ int SensorBase::close_device() {
     return 0;
 }
 
-int SensorBase::getFd() const {
-
+int SensorBase::getFd() {
 	if(data_fd>=0)
 		return data_fd;
 	return dev_fd;
@@ -106,6 +101,61 @@ int64_t SensorBase::getTimestamp() {
     t.tv_sec = t.tv_nsec = 0;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return int64_t(t.tv_sec)*1000000000LL + t.tv_nsec;
+}
+
+int SensorBase::getClassPath(char *des, const char *name)
+{
+    const char *dirname = "/sys/class/input";
+    char buf[256];
+    char class_path[PATH_MAX];
+    
+    int res;
+    DIR *dir;
+    struct dirent *de;
+    int fd = -1;
+    int found = 0;
+
+	if(!name)
+		return -1;
+
+    dir = opendir(dirname);
+    if (dir == NULL)
+    	return -1;
+
+	while((de = readdir(dir))) {
+		if (strncmp(de->d_name, "input", strlen("input")) != 0) {
+		    continue;
+        	}
+
+		sprintf(class_path, "%s/%s", dirname, de->d_name);
+		snprintf(buf, sizeof(buf), "%s/name", class_path);
+
+		fd = open(buf, O_RDONLY);
+		if (fd < 0) {
+		    continue;
+		}
+		if ((res = read(fd, buf, sizeof(buf))) < 0) {
+		    close(fd);
+		    continue;
+		}
+		buf[res - 1] = '\0';
+		if (strcmp(buf, name) == 0) {
+		    found = 1;
+		    close(fd);
+		    break;
+		}
+
+		close(fd);
+		fd = -1;
+	}
+	closedir(dir);
+
+    if (found) {
+        snprintf(des, PATH_MAX, "%s", class_path);
+        return 0;
+    }else {
+        return -1;
+    }
 }
 
 int SensorBase::openInput(const char* inputName) {
@@ -149,7 +199,7 @@ int SensorBase::openInput(const char* inputName) {
     return fd;
 }
 
-int SensorBase::probeInput(enum sensor_type s_type)
+int SensorBase::probeInput()
 {
     int fd = -1;
     const char *dirname = "/dev/input";
@@ -178,64 +228,45 @@ int SensorBase::probeInput(enum sensor_type s_type)
         strcpy(filename, de->d_name);
         fd = open(devname, O_RDONLY);
         if (fd>=0) {
-		char name[80];
-		const struct sensor_config *pconfig = get_supported_sensor_cfg();
-		if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), &name) < 1) {
-			name[0] = '\0';
-		}
-		ALOGD("Aml sensor hal, probing input : %s\n", name);
-		while(pconfig->type != AML_SENSOR_TYPE_NONE)
-		{
-		    if ((s_type == pconfig->type) && (!strcmp(name, pconfig->name))) {
-			strcpy(input_name, filename);
-			found_match = 1;
-			ALOGD("openInput input_name:%s", name);
-			break;
-		    }
-		    pconfig++;
-		}
-
-		if(found_match)
-		{
-			sensor_cfg = pconfig;
-			break;
-		}
-		else
-		{
-			unsigned long bits;
-			if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(bits)), &bits) <= 0) 
+			char name[80];
+			const struct sensor_config *pconfig = get_supported_sensor_cfg();
+			if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), &name) < 1) {
+				name[0] = '\0';
+			}
+			ALOGD("Aml sensor hal, probing input : %s\n", name);
+			while(pconfig->type != AML_SENSOR_TYPE_NONE)
 			{
-				ALOGE("Get ABS event bit failed. \n");
+				if ((getSensorType() == pconfig->type) && (!strcmp(name, pconfig->name))) {
+				strcpy(input_name, filename);
+				found_match = 1;
+				ALOGD("openInput input_name:%s", name);
+				break;
+				}
+				pconfig++;
+			}
+
+			if(found_match)
+			{
+				sensor_cfg = pconfig;
+				break;
 			}
 			else
-			{
-				int type_match = 0;
-				switch(s_type)	//TODO: This is ugly, make it a virtual function.
-				{
-					case AML_SENSOR_TYPE_GRAVITY :
-					if(bits & (1UL<<ABS_X) && bits & (1UL<<ABS_Y) && (1UL<<ABS_Z))
-						type_match = 1;
-					break;
-
-					case AML_SENSOR_TYPE_LIGHT :
-					break;
-					case AML_SENSOR_TYPE_COMPASS:
-					break;
-					default :
-					break;
-				}
+			{//Unknow input device, probe it to find out its type.
+				ALOGD("Aml sensor hal, probing device type of %s\n", name);
+				bool type_match = probeSensorType(fd);
 				if(type_match)
 				{
 					found_dummy++;
 					if(found_dummy == 1)
-					{//Found a dummy sensor. Keep the file open.
-					ALOGD("Found a dummy sensor %s\n", name);
+					{//Found a dummy sensor. Keep the first dummy fd open.
+						ALOGD("Found a dummy sensor %s\n", name);
 						dummy_fd = fd;
-						set_dummy_sensor_name(s_type, name);
+						setDummySensorName(name);
 						fd = -1;
 					}
 					else
 					{//Found more than one dummy sensor, close them all.
+						ALOGD("Found more than dummy for %s, HAL confused\n", name);
 						//close previously founded dummy sensor fd.
 						close(dummy_fd);
 						dummy_fd = -1;
@@ -249,18 +280,16 @@ int SensorBase::probeInput(enum sensor_type s_type)
 					close(fd);
 					fd = -1;	
 				}
-			}//if(ioctl)
-
-		}//if(found_match)
-	}//if(fd>=0)
+			}//if(found_match)
+		}//if(fd>=0)
     }//while
 
     if(!found_match && found_dummy==1)
     {//No matched sensor, but found one and only one dummy sensor.
-	fd = dummy_fd;
-	sensor_cfg = get_dummy_sensor_cfg(s_type);
-	using_dummy = 1;
-	ALOGD("Found no match, reckon %s as sensor and use dummy configuration\n", sensor_cfg->name);
+		fd = dummy_fd;
+		sensor_cfg = get_dummy_sensor_cfg(getSensorType());
+		using_dummy = 1;
+		ALOGD("Found no match, reckon %s as sensor and use dummy configuration\n", sensor_cfg->name);
     }
 		    
     closedir(dir);
@@ -268,4 +297,21 @@ int SensorBase::probeInput(enum sensor_type s_type)
         ALOGE("Sensor HAL failed to find a supported device");
     return fd;
 
+}
+int SensorBase::initialize()
+{
+	data_fd = probeInput();	
+	if(data_fd < 0)
+	{
+		ALOGE("Error : Sensor HAL failed to open device");
+		return -1;
+	}
+	if(sensor_cfg)//getClassPath may also fail, but we let it pass.
+	{
+		if(getClassPath(class_path, sensor_cfg->name) < 0)
+			ALOGE("Error : Sensor HAL failed to find attribute files in /sys for %s", sensor_cfg->name);
+		else
+			ALOGD("Sensor HAL : sensor attrubutes : %s", class_path);
+	}
+	return 0;
 }

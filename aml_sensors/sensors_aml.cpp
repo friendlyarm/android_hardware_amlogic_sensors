@@ -179,14 +179,14 @@ sensors_poll_context_t::sensors_poll_context_t()
 {
     FUNC_LOG;
 
-	printf("Aml sensor hal, about to new GSensor\n");
+	ALOGD("Aml sensor hal, about to new GSensor\n");
     mSensors[aml_accel] = new GSensor();
-
+	mSensors[aml_accel]->initialize();
     mPollFds[aml_accel].fd = mSensors[aml_accel]->getFd();
     mPollFds[aml_accel].events = POLLIN;
     mPollFds[aml_accel].revents = 0;
 
-	printf("Gsensor fd %d\n", mPollFds[aml_accel].fd);
+	ALOGD("Gsensor fd %d\n", mPollFds[aml_accel].fd);
 
 #ifdef ENABLE_LIGHT_SENSOR
     mSensors[aml_light] = new LightSensor();
