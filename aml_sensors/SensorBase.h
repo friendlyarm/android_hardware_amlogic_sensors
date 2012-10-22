@@ -22,7 +22,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
-
+#include "SensorConfigure.h"
 /*****************************************************************************/
 
 struct sensors_event_t;
@@ -35,8 +35,10 @@ protected:
     char        class_path[PATH_MAX];
     int         dev_fd;
     int         data_fd;
+	const struct sensor_config *sensor_cfg;
 
     int openInput(const char* inputName);
+    int probeInput(enum sensor_type s_type);
     static int64_t getTimestamp();
 
 
@@ -51,6 +53,10 @@ public:
             SensorBase(
                     const char* dev_name,
                     const char* data_name);
+
+	SensorBase(
+        	const char* dev_name,
+		enum sensor_type s_type);
 
     virtual ~SensorBase();
 

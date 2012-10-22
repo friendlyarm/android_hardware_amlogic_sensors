@@ -30,6 +30,18 @@
 
 #define FIRST_GOOD_EVENT    1
 
+
+#ifndef ALOGD
+#define ALOGD	LOGD
+#define ALOGE	LOGE
+#define ALOGV	LOGV
+#define ALOGE_IF	LOGE_IF
+#define ALOGD_IF	LOGD_IF
+#define ALOGV_IF	LOGV_IF
+#endif
+
+
+
 LightSensor::LightSensor()
     : SensorBase(NULL, "light_sensor"),
       mEnabled(0),

@@ -39,6 +39,21 @@
 
 /*****************************************************************************/
 
+
+
+
+#ifndef ALOGD
+#define ALOGD	LOGD
+#define ALOGE	LOGE
+#define ALOGV	LOGV
+#define ALOGE_IF	LOGE_IF
+#define ALOGD_IF	LOGD_IF
+#define ALOGV_IF	LOGV_IF
+#endif
+
+
+
+
 #define DELAY_OUT_TIME 0x7FFFFFFF
 
 #define LIGHT_SENSOR_POLLTIME    2000000000
@@ -59,6 +74,7 @@
 
 /* The SENSORS Module */
 static const struct sensor_t sSensorList[] = {
+#if 1
         { 	"BMA250 3-axis Accelerometer",
                 "Bosch",
                 1, SENSORS_ACCELERATION_HANDLE,
@@ -82,7 +98,7 @@ static const struct sensor_t sSensorList[] = {
           SENSOR_TYPE_LIGHT, 5000.0f, 1.0f, 1.0f, 20000,{ } },
 #endif
 
-
+#endif
 };
 
 
@@ -163,11 +179,14 @@ sensors_poll_context_t::sensors_poll_context_t()
 {
     FUNC_LOG;
 
+	printf("Aml sensor hal, about to new GSensor\n");
     mSensors[aml_accel] = new GSensor();
+
     mPollFds[aml_accel].fd = mSensors[aml_accel]->getFd();
     mPollFds[aml_accel].events = POLLIN;
     mPollFds[aml_accel].revents = 0;
 
+	printf("Gsensor fd %d\n", mPollFds[aml_accel].fd);
 
 #ifdef ENABLE_LIGHT_SENSOR
     mSensors[aml_light] = new LightSensor();

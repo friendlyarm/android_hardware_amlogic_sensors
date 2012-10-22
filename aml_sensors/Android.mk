@@ -13,22 +13,12 @@
 # limitations under the License.
 
 
+ifeq ($(BOARD_USES_AML_SENSOR_HAL),true)
+
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-FLAG_AML := false
-ifeq ($(BOARD_USES_SENSOR_BMA250_AML),true)
-FLAG_AML := true
-LOCAL_CFLAGS := -DSENSOR_NAME=\"bma250\" -DACCELEROMETER_SENSOR_BMA250
-endif #BOARD_USES_SENSOR_BMA250
 
-ifeq ($(BOARD_USES_SENSOR_MMA8452),true)
-FLAG_AML := true
-LOCAL_CFLAGS := -DSENSOR_NAME=\"amlGsensor\" -DACCELEROMETER_SENSOR_MMA8452
-endif #BOARD_USES_SENSOR_MMA8452
-
-
-ifeq ($(FLAG_AML),true)
 # HAL module implemenation, not prelinked, and stored in
 # hw/<SENSORS_HARDWARE_MODULE_ID>.<ro.product.board>.so
 
@@ -48,7 +38,8 @@ LOCAL_SRC_FILES := 						\
 				sensors_aml.cpp          \
 				SensorBase.cpp           \
 				InputEventReader.cpp   \
-				LightSensorAML.cpp
+				LightSensorAML.cpp	\
+				SensorConfigure.cpp
 				
 LOCAL_SHARED_LIBRARIES := liblog libcutils
 LOCAL_PRELINK_MODULE := false

@@ -37,28 +37,19 @@
 
 #include "Gsensor.h"
 
-//#define DEBUG_SENSOR            0
 
-#if defined(ACCELEROMETER_SENSOR_MMA8451)
-  #define LSG                         (4096.0f) // 4096 LSG = 1G for MMA8451
-#elif defined(ACCELEROMETER_SENSOR_MMA8450)
-  #define LSG                         (1024.0f) // 1024 LSG = 1G for MMA8450
-#elif defined(ACCELEROMETER_SENSOR_MMA8452)
-  #define LSG                         (720.0f) //(1024.0f) // 1024 LSG = 1G for MMA8452
-#elif defined(ACCELEROMETER_SENSOR_BMA250)
-  #define LSG                         (256.0f)
+
+#ifndef ALOGD
+#define ALOGD	LOGD
+#define ALOGE	LOGE
+#define ALOGV	LOGV
+#define ALOGE_IF	LOGE_IF
+#define ALOGD_IF	LOGD_IF
+#define ALOGV_IF	LOGV_IF
 #endif
 
-#ifndef SENSOR_NAME
-#error "Must define SENSOR_NAME in aml_Gsensor HAL !!"
-#endif
 
-#define CONVERT                     (GRAVITY_EARTH / LSG)
-#define CONVERT_X                   -(CONVERT)
-#define CONVERT_Y                   -(CONVERT)
-#define CONVERT_Z                   (CONVERT)
-#define INPUT_DIR               "/dev/input"
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
 /*
 gspos:
 0:x =  x, y =  y, z = z
@@ -124,7 +115,7 @@ static int set_sysfs_input_attr(char *class_path,
 	return 0;
 }
 
-
+#ifdef SENSOR_NAME
 static int sensor_get_class_path(char *des)
 {
     char *dirname = "/sys/class/input";
@@ -177,16 +168,83 @@ static int sensor_get_class_path(char *des)
     }
 
 }
+#endif
+
+static int sensor_get_class_path(char *des, const char *name)
+{
+    const char *dirname = "/sys/class/input";
+    char buf[256];
+    char class_path[PATH_MAX];
+    
+    int res;
+    DIR *dir;
+    struct dirent *de;
+    int fd = -1;
+    int found = 0;
+
+	if(!name)
+		return -1;
+
+    dir = opendir(dirname);
+    if (dir == NULL)
+    	return -1;
+
+	while((de = readdir(dir))) {
+		if (strncmp(de->d_name, "input", strlen("input")) != 0) {
+		    continue;
+        	}
+
+		sprintf(class_path, "%s/%s", dirname, de->d_name);
+		snprintf(buf, sizeof(buf), "%s/name", class_path);
+
+		fd = open(buf, O_RDONLY);
+		if (fd < 0) {
+		    continue;
+		}
+		if ((res = read(fd, buf, sizeof(buf))) < 0) {
+		    close(fd);
+		    continue;
+		}
+		buf[res - 1] = '\0';
+		if (strcmp(buf, name) == 0) {
+		    found = 1;
+		    close(fd);
+		    break;
+		}
+
+		close(fd);
+		fd = -1;
+	}
+	closedir(dir);
+
+    if (found) {
+        snprintf(des, PATH_MAX, "%s", class_path);
+        return 0;
+    }else {
+        return -1;
+    }
+
+}
+
+
 
 GSensor::GSensor() :
-    SensorBase(NULL, SENSOR_NAME),
+    SensorBase(NULL, AML_SENSOR_TYPE_GRAVITY),
     mEnabled(0)
 {
     m_gspos = acc_aml_get_install_dir();
+
+#ifdef SENSOR_NAME	
     if(0> sensor_get_class_path(class_path) ){
         ALOGE("failed to sensor_get_class_path!!");
         return ;
     }
+#else
+    if(!sensor_cfg || (0> sensor_get_class_path(class_path, sensor_cfg->name))){
+        ALOGE("failed to sensor_get_class_path!!");
+        return ;
+    }
+#endif
 
     ALOGD("dgt GSensor:m_gspos=%d,class_path is %s \n", m_gspos, class_path);
 }
@@ -224,44 +282,49 @@ int GSensor:: readEvents(sensors_event_t* data, int count) {
     struct input_event event;
     int ret;
     int gspos = m_gspos ;
-
+	float convert;
 
     if (data_fd < 0)
         return 0;
+	
+	convert = GRAVITY_EARTH / sensor_cfg->config.gs_config.LSG;
 	
     while (1) {
         ret = read(data_fd, &event, sizeof(event));
 
         if (event.type == EV_ABS) {
-
+		if(sensor_cfg->config.gs_config.filter)
+			{
+			event.value = sensor_cfg->config.gs_config.filter(event.code, event.value);
+			}
             switch (event.code) {
                 case ABS_X:
                     if(gspos == 0||gspos == 6){
-                        data->acceleration.x = event.value * CONVERT;	
+                        data->acceleration.x = event.value * convert;	
 			} else if(gspos == 1||gspos == 7){
-                         data->acceleration.y = event.value * CONVERT;	
+                         data->acceleration.y = event.value * convert;	
                     } else if(gspos == 2||gspos == 4){
-                        data->acceleration.x = -event.value * CONVERT;	
+                        data->acceleration.x = -event.value * convert;	
                     } else if(gspos == 3||gspos == 5){
-                        data->acceleration.y = -event.value * CONVERT;	
+                        data->acceleration.y = -event.value * convert;	
                     }			    
 			break;
                 case ABS_Y:
                 if(gspos == 0||gspos == 4){
-                    data->acceleration.y = event.value * CONVERT;	
+                    data->acceleration.y = event.value * convert;	
                 } else if(gspos == 1||gspos == 5){
-                    data->acceleration.x = -event.value * CONVERT;	
+                    data->acceleration.x = -event.value * convert;	
                 } else if(gspos == 2||gspos == 6){
-                    data->acceleration.y = -event.value * CONVERT;	
+                    data->acceleration.y = -event.value * convert;	
                 } else if(gspos == 3||gspos == 7){
-                    data->acceleration.x = event.value * CONVERT;	
+                    data->acceleration.x = event.value * convert;	
                 }
                     break;
                 case ABS_Z:
                     if(gspos < 4){
-                        data->acceleration.z = event.value * CONVERT;
+                        data->acceleration.z = event.value * convert;
                     }else{
-                        data->acceleration.z = -event.value * CONVERT;			        
+                        data->acceleration.z = -event.value * convert;			        
                     }
                     break;
             }

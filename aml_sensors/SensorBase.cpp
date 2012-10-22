@@ -27,8 +27,19 @@
 #include <linux/input.h>
 
 #include "SensorBase.h"
-
+#include "SensorConfigure.h"
 /*****************************************************************************/
+
+
+#ifndef ALOGD
+#define ALOGD	LOGD
+#define ALOGE	LOGE
+#define ALOGV	LOGV
+#define ALOGE_IF	LOGE_IF
+#define ALOGD_IF	LOGD_IF
+#define ALOGV_IF	LOGV_IF
+#endif
+
 
 SensorBase::SensorBase(
         const char* dev_name,
@@ -39,6 +50,16 @@ SensorBase::SensorBase(
     if (data_name) {
         data_fd = openInput(data_name);
     }
+}
+
+SensorBase::SensorBase(
+        const char* dev_name,
+	enum sensor_type s_type)
+    : dev_name(dev_name), data_name(NULL),
+      dev_fd(-1), data_fd(-1), sensor_cfg(NULL)
+{
+	printf("Aml sensor hal, about to probeInput\n");
+	data_fd = probeInput(s_type);	
 }
 
 SensorBase::~SensorBase() {
@@ -127,4 +148,66 @@ int SensorBase::openInput(const char* inputName) {
     if(fd<0)
         ALOGE("couldn't find '%s' input device", inputName);
     return fd;
+}
+
+int SensorBase::probeInput(enum sensor_type s_type)
+{
+    int fd = -1;
+    const char *dirname = "/dev/input";
+    char devname[PATH_MAX];
+    char *filename;
+    DIR *dir;
+    struct dirent *de;
+    dir = opendir(dirname);
+    if(dir == NULL)
+        return -1;
+    strcpy(devname, dirname);
+    filename = devname + strlen(devname);
+    *filename++ = '/';
+    while((de = readdir(dir))) {
+        if(de->d_name[0] == '.' &&
+                (de->d_name[1] == '\0' ||
+                        (de->d_name[1] == '.' && de->d_name[2] == '\0')))
+            continue;
+        strcpy(filename, de->d_name);
+        fd = open(devname, O_RDONLY);
+        if (fd>=0) {
+		char name[80];
+		int found_match = 0;
+		const struct sensor_config *pconfig = get_supported_sensor_cfg();
+		if (ioctl(fd, EVIOCGNAME(sizeof(name) - 1), &name) < 1) {
+			name[0] = '\0';
+		}
+
+		ALOGD("Aml sensor hal, probing input : %s\n", name);
+		printf("Aml sensor hal, probing input : %s\n", name);
+		while(pconfig->type != AML_SENSOR_TYPE_NONE)
+		{
+		    if ((s_type == pconfig->type) && (!strcmp(name, pconfig->name))) {
+			strcpy(input_name, filename);
+			found_match = 1;
+			ALOGD("openInput input_name:%s", input_name);
+			break;
+		    }
+		    pconfig++;
+		}
+
+		if(found_match)
+		{
+			sensor_cfg = pconfig;
+			data_name = pconfig->name;
+			break;
+		}
+		else
+		{
+			close(fd);
+			fd = -1;
+		}
+	}
+    }
+    closedir(dir);
+    if(fd<0)
+        ALOGE("Sensor HAL failed to find a supported device");
+    return fd;
+
 }
