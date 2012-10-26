@@ -122,7 +122,7 @@ const static struct sensor_config supported_sensors[] =
 		{NULL, AML_SENSOR_TYPE_NONE, {{0, 0}}},	
 };	
 
-const static struct sensor_config dummy_sensors[] =
+static struct sensor_config dummy_sensors[] =
 {
 		{(const char *)dummy_gsensor_name, AML_SENSOR_TYPE_GRAVITY, {{0, 9.8f}}},
 
@@ -161,7 +161,7 @@ void set_dummy_gsensor_cfg(const struct gsensor_config *gs_cfg)
 	const struct sensor_config *config = get_dummy_sensor_cfg(AML_SENSOR_TYPE_GRAVITY);
 	if(config)
 	{
-		struct gsensor_config *cfg = const_cast<struct gsensor_config *> (&config->config.gs_config);
+		struct gsensor_config *cfg = (struct gsensor_config *)(&config->config.gs_config);
 		ALOGD("Configuring dummy gsensor\n");
 		*cfg = *gs_cfg;
 	}
