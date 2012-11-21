@@ -113,7 +113,7 @@ const static struct sensor_config supported_sensors[] =
 		{"bma250", AML_SENSOR_TYPE_GRAVITY, {{0, 256.0f}}},
 		{"bma222", AML_SENSOR_TYPE_GRAVITY, {{0, 64.0f}}},
 		{"mc32x0", AML_SENSOR_TYPE_GRAVITY, {{0, 86.0f}}},
-		{"mma7660", AML_SENSOR_TYPE_GRAVITY, {{mma7660_filter, 21.0f}}},
+		{"mma7660", AML_SENSOR_TYPE_GRAVITY, {{0, 21.0f}}},
 		{"mma8452", AML_SENSOR_TYPE_GRAVITY, {{0, 1024.0f}}},
 		{"dmard06", AML_SENSOR_TYPE_GRAVITY, {{0, 32.0f}}},
 		{"afa750", AML_SENSOR_TYPE_GRAVITY, {{0, 4096.0f}}},
